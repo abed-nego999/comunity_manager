@@ -1,0 +1,39 @@
+# ── Secretos y configuración local ──────────────────
+.env
+*.env.local
+
+# ── Base de datos H2 ─────────────────────────────────
+data/
+*.mv.db
+*.trace.db
+
+# ── Almacenamiento de ficheros multimedia ────────────
+storage/
+
+# ── Compilados Maven ─────────────────────────────────
+target/
+!.mvn/wrapper/maven-wrapper.jar
+!**/src/main/**/target/
+!**/src/test/**/target/
+
+# ── IntelliJ IDEA ────────────────────────────────────
+.idea/
+*.iws
+*.iml
+*.ipr
+
+# ── Sistema operativo (Windows) ──────────────────────
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# ── Sistema operativo (Mac) ──────────────────────────
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# ── Logs ─────────────────────────────────────────────
+logs/
+*.log
+spring.log
