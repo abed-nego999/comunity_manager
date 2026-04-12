@@ -10,6 +10,10 @@ data/
 # ── Almacenamiento de ficheros multimedia ────────────
 storage/
 
+# ── Claude Code ──────────────────────────────────────
+# Worktrees temporales creados por Claude Code para ediciones aisladas
+.claude/worktrees/
+
 # ── Compilados Maven ─────────────────────────────────
 target/
 !.mvn/wrapper/maven-wrapper.jar

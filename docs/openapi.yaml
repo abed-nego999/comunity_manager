@@ -1,0 +1,1145 @@
+openapi: 3.0.3
+info:
+  title: Community Manager API
+  description: |
+    API REST para gestión y publicación de contenido en redes sociales.
+    Tanto el frontend (Thymeleaf) como Claude (Tool Use) interactúan con
+    la app mediante estos mismos endpoints.
+  version: 2.0.0
+  contact:
+    email: abselpisoton@gmail.com
+
+servers:
+  - url: http://localhost:8080/api/v1
+    description: Servidor local
+
+tags:
+  - name: Auxiliares
+    description: Catálogos de solo lectura — plataformas, tipos y roles
+  - name: Clientes
+    description: Gestión de clientes
+  - name: Configuracion
+    description: System prompt de Claude e instrucciones por plataforma
+  - name: Credenciales
+    description: Tokens de acceso a APIs externas cifrados por cliente y plataforma
+  - name: Eventos
+    description: Gestión de eventos y conversación con Claude
+  - name: Publicaciones
+    description: Ciclo de vida de publicaciones generadas por Claude
+  - name: Adjuntos
+    description: Archivos multimedia asociados a publicaciones
+
+# ─────────────────────────────────────────────
+# PATHS
+# ─────────────────────────────────────────────
+paths:
+
+  # ── AUXILIARES ──────────────────────────────
+
+  /plataformas:
+    get:
+      tags: [Auxiliares]
+      summary: Listar plataformas
+      operationId: listarPlataformas
+      responses:
+        '200':
+          description: Lista de plataformas
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Plataforma'
+
+  /tipos-publicacion:
+    get:
+      tags: [Auxiliares]
+      summary: Listar tipos de publicación
+      operationId: listarTiposPublicacion
+      parameters:
+        - name: plataformaId
+          in: query
+          required: false
+          schema:
+            type: string
+            format: uuid
+          description: Filtrar por plataforma
+      responses:
+        '200':
+          description: Lista de tipos de publicación
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/TipoPublicacion'
+
+  /tipos-adjunto:
+    get:
+      tags: [Auxiliares]
+      summary: Listar tipos de adjunto
+      operationId: listarTiposAdjunto
+      responses:
+        '200':
+          description: Lista de tipos de adjunto
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/TipoAdjunto'
+
+  /roles-conversacion:
+    get:
+      tags: [Auxiliares]
+      summary: Listar roles de conversación
+      operationId: listarRolesConversacion
+      responses:
+        '200':
+          description: Lista de roles
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/RolConversacion'
+
+  # ── CLIENTES ────────────────────────────────
+
+  /clientes:
+    get:
+      tags: [Clientes]
+      summary: Listar clientes
+      operationId: listarClientes
+      responses:
+        '200':
+          description: Lista de clientes
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Cliente'
+
+    post:
+      tags: [Clientes]
+      summary: Crear cliente
+      operationId: crearCliente
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ClienteRequest'
+      responses:
+        '201':
+          description: Cliente creado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Cliente'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+
+  /clientes/{id}:
+    get:
+      tags: [Clientes]
+      summary: Obtener cliente
+      operationId: obtenerCliente
+      parameters:
+        - $ref: '#/components/parameters/id'
+      responses:
+        '200':
+          description: Cliente encontrado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Cliente'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    put:
+      tags: [Clientes]
+      summary: Actualizar cliente
+      operationId: actualizarCliente
+      parameters:
+        - $ref: '#/components/parameters/id'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ClienteRequest'
+      responses:
+        '200':
+          description: Cliente actualizado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Cliente'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    delete:
+      tags: [Clientes]
+      summary: Eliminar cliente
+      operationId: eliminarCliente
+      parameters:
+        - $ref: '#/components/parameters/id'
+      responses:
+        '204':
+          description: Cliente eliminado
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  # ── CONFIGURACION ────────────────────────────
+
+  /clientes/{id}/configuracion:
+    get:
+      tags: [Configuracion]
+      summary: Obtener configuración del cliente
+      operationId: obtenerConfiguracion
+      parameters:
+        - $ref: '#/components/parameters/id'
+      responses:
+        '200':
+          description: Configuración encontrada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConfiguracionCliente'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    put:
+      tags: [Configuracion]
+      summary: Actualizar configuración general del cliente
+      operationId: actualizarConfiguracion
+      parameters:
+        - $ref: '#/components/parameters/id'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ConfiguracionClienteRequest'
+      responses:
+        '200':
+          description: Configuración actualizada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConfiguracionCliente'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /clientes/{id}/configuracion/instrucciones:
+    get:
+      tags: [Configuracion]
+      summary: Listar instrucciones por plataforma
+      operationId: listarInstrucciones
+      parameters:
+        - $ref: '#/components/parameters/id'
+      responses:
+        '200':
+          description: Lista de instrucciones por plataforma
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/InstruccionPlataforma'
+
+  /clientes/{id}/configuracion/instrucciones/{plataformaId}:
+    put:
+      tags: [Configuracion]
+      summary: Crear o actualizar instrucción para una plataforma
+      description: |
+        La combinación (configuracion, plataforma) es única.
+        Si ya existe una instrucción para esa plataforma se sobreescribe.
+      operationId: upsertInstruccion
+      parameters:
+        - $ref: '#/components/parameters/id'
+        - name: plataformaId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InstruccionPlataformaRequest'
+      responses:
+        '200':
+          description: Instrucción guardada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InstruccionPlataforma'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  # ── CREDENCIALES ─────────────────────────────
+
+  /clientes/{id}/credenciales:
+    get:
+      tags: [Credenciales]
+      summary: Listar credenciales del cliente
+      description: Los tokens nunca se devuelven en claro — solo metadatos.
+      operationId: listarCredenciales
+      parameters:
+        - $ref: '#/components/parameters/id'
+      responses:
+        '200':
+          description: Lista de credenciales
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Credencial'
+
+  /clientes/{id}/credenciales/{plataformaId}:
+    put:
+      tags: [Credenciales]
+      summary: Guardar o actualizar credencial para una plataforma
+      description: Los tokens se cifran con AES antes de persistir en base de datos.
+      operationId: upsertCredencial
+      parameters:
+        - $ref: '#/components/parameters/id'
+        - name: plataformaId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CredencialRequest'
+      responses:
+        '200':
+          description: Credencial guardada y cifrada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Credencial'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    delete:
+      tags: [Credenciales]
+      summary: Eliminar credencial de una plataforma
+      operationId: eliminarCredencial
+      parameters:
+        - $ref: '#/components/parameters/id'
+        - name: plataformaId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '204':
+          description: Credencial eliminada
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  # ── EVENTOS ──────────────────────────────────
+
+  /eventos:
+    get:
+      tags: [Eventos]
+      summary: Listar eventos de un cliente
+      operationId: listarEventos
+      parameters:
+        - name: clienteId
+          in: query
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Lista de eventos
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Evento'
+
+    post:
+      tags: [Eventos]
+      summary: Crear evento
+      operationId: crearEvento
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EventoRequest'
+      responses:
+        '201':
+          description: Evento creado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Evento'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+
+  /eventos/{id}:
+    get:
+      tags: [Eventos]
+      summary: Obtener evento
+      operationId: obtenerEvento
+      parameters:
+        - $ref: '#/components/parameters/id'
+      responses:
+        '200':
+          description: Evento encontrado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Evento'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    put:
+      tags: [Eventos]
+      summary: Actualizar evento
+      operationId: actualizarEvento
+      parameters:
+        - $ref: '#/components/parameters/id'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EventoRequest'
+      responses:
+        '200':
+          description: Evento actualizado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Evento'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /eventos/{id}/conversacion:
+    get:
+      tags: [Eventos]
+      summary: Obtener historial completo de la conversación
+      operationId: obtenerConversacion
+      parameters:
+        - $ref: '#/components/parameters/id'
+      responses:
+        '200':
+          description: Historial de mensajes ordenado cronológicamente
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/MensajeConversacion'
+
+    post:
+      tags: [Eventos]
+      summary: Enviar mensaje — dispara llamada a Claude
+      description: |
+        El backend guarda el mensaje del usuario, construye el system prompt
+        a partir de CONFIGURACION_CLIENTE e INSTRUCCION_PLATAFORMA, envía el
+        historial completo a Claude y devuelve su respuesta.
+        Claude puede haber creado o actualizado publicaciones en base de datos
+        como efecto secundario mediante Tool Use.
+      operationId: enviarMensaje
+      parameters:
+        - $ref: '#/components/parameters/id'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MensajeRequest'
+      responses:
+        '200':
+          description: Respuesta de Claude
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MensajeRespuesta'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  # ── PUBLICACIONES ────────────────────────────
+
+  /publicaciones:
+    get:
+      tags: [Publicaciones]
+      summary: Listar publicaciones de un evento
+      operationId: listarPublicaciones
+      parameters:
+        - name: eventoId
+          in: query
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: estado
+          in: query
+          required: false
+          schema:
+            $ref: '#/components/schemas/EstadoPublicacion'
+      responses:
+        '200':
+          description: Lista de publicaciones
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Publicacion'
+
+    post:
+      tags: [Publicaciones]
+      summary: Crear publicación en borrador
+      description: |
+        Usado por Claude mediante Tool Use para crear publicaciones directamente.
+        El estado inicial siempre es PENDIENTE.
+      operationId: crearPublicacion
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PublicacionRequest'
+      responses:
+        '201':
+          description: Publicación creada en estado PENDIENTE
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Publicacion'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+
+  /publicaciones/{id}:
+    get:
+      tags: [Publicaciones]
+      summary: Obtener publicación
+      operationId: obtenerPublicacion
+      parameters:
+        - $ref: '#/components/parameters/id'
+      responses:
+        '200':
+          description: Publicación encontrada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Publicacion'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    put:
+      tags: [Publicaciones]
+      summary: Actualizar contenido de una publicación
+      description: |
+        Usado por Claude mediante Tool Use para regenerar contenido tras
+        recibir feedback del usuario.
+      operationId: actualizarPublicacion
+      parameters:
+        - $ref: '#/components/parameters/id'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PublicacionRequest'
+      responses:
+        '200':
+          description: Publicación actualizada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Publicacion'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /publicaciones/{id}/aprobar:
+    patch:
+      tags: [Publicaciones]
+      summary: Aprobar publicación
+      description: Cambia el estado a APROBADA. Operación local — no llama a ninguna API externa.
+      operationId: aprobarPublicacion
+      parameters:
+        - $ref: '#/components/parameters/id'
+      responses:
+        '200':
+          description: Publicación aprobada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Publicacion'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /publicaciones/{id}/rechazar:
+    patch:
+      tags: [Publicaciones]
+      summary: Rechazar publicación
+      description: Cambia el estado a RECHAZADA. Queda registrada en el historial.
+      operationId: rechazarPublicacion
+      parameters:
+        - $ref: '#/components/parameters/id'
+      responses:
+        '200':
+          description: Publicación rechazada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Publicacion'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /publicaciones/{id}/solicitar-cambios:
+    patch:
+      tags: [Publicaciones]
+      summary: Solicitar cambios con feedback
+      description: |
+        Guarda el feedback del usuario en la publicación. El usuario
+        continuará la conversación en el chat del evento para que Claude
+        lea el feedback y regenere el contenido.
+      operationId: solicitarCambios
+      parameters:
+        - $ref: '#/components/parameters/id'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FeedbackRequest'
+      responses:
+        '200':
+          description: Feedback guardado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Publicacion'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /publicaciones/{id}/publicar:
+    post:
+      tags: [Publicaciones]
+      summary: Publicar en la plataforma
+      description: |
+        Llama a la API externa (Meta Graph API o YouTube Data API) según el
+        tipo de publicación. Operación separada del cambio de estado para
+        no mezclar lógica local con llamadas externas.
+
+        Si fecha_publicacion es futura y programacion_externa=true en el
+        tipo de publicación, se envía a la plataforma con esa fecha —
+        Meta o YouTube gestionan el timing internamente.
+
+        Al completarse guarda en la publicación:
+        - fecha_envio: momento en que la app llamó a la API
+        - fecha_publicacion: fecha en que la plataforma publicará al público
+        - id_externo: ID devuelto por la plataforma para trazabilidad
+        - estado: ENVIADA
+      operationId: publicar
+      parameters:
+        - $ref: '#/components/parameters/id'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PublicarRequest'
+      responses:
+        '200':
+          description: Publicación enviada a la plataforma
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Publicacion'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  # ── ADJUNTOS ─────────────────────────────────
+
+  /publicaciones/{id}/adjuntos:
+    get:
+      tags: [Adjuntos]
+      summary: Listar adjuntos de una publicación
+      operationId: listarAdjuntos
+      parameters:
+        - $ref: '#/components/parameters/id'
+      responses:
+        '200':
+          description: Lista de adjuntos
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Adjunto'
+
+    post:
+      tags: [Adjuntos]
+      summary: Subir adjunto a una publicación
+      description: |
+        El fichero se guarda en:
+        storage/clientes/{id}_{nombre}/eventos/{id}_{nombre}/adjuntos/
+      operationId: subirAdjunto
+      parameters:
+        - $ref: '#/components/parameters/id'
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [fichero, tipoAdjuntoId]
+              properties:
+                fichero:
+                  type: string
+                  format: binary
+                tipoAdjuntoId:
+                  type: string
+                  format: uuid
+      responses:
+        '201':
+          description: Adjunto subido y guardado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Adjunto'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+
+  /publicaciones/{id}/adjuntos/{adjuntoId}:
+    delete:
+      tags: [Adjuntos]
+      summary: Eliminar adjunto
+      operationId: eliminarAdjunto
+      parameters:
+        - $ref: '#/components/parameters/id'
+        - name: adjuntoId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '204':
+          description: Adjunto eliminado
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+# ─────────────────────────────────────────────
+# COMPONENTS
+# ─────────────────────────────────────────────
+components:
+
+  parameters:
+    id:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+
+  responses:
+    NotFound:
+      description: Recurso no encontrado
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    BadRequest:
+      description: Petición inválida
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+
+  schemas:
+
+    # ── AUXILIARES ────────────────────────────
+
+    Plataforma:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        nombre:
+          type: string
+          example: Instagram
+
+    TipoPublicacion:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        plataforma:
+          $ref: '#/components/schemas/Plataforma'
+        nombre:
+          type: string
+          example: Post
+        publicacionAutomatica:
+          type: boolean
+          description: true si la app puede publicar este tipo vía API
+          example: true
+        programacionExterna:
+          type: boolean
+          description: true si la plataforma soporta recibir una fecha futura en la llamada API
+          example: true
+
+    TipoAdjunto:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        nombre:
+          type: string
+          example: Imagen
+
+    RolConversacion:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        nombre:
+          type: string
+          example: Claude
+
+    # ── CLIENTE ───────────────────────────────
+
+    Cliente:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        nombre:
+          type: string
+          example: ABS El Pisotón
+        email:
+          type: string
+          format: email
+        telefono:
+          type: string
+        web:
+          type: string
+          format: uri
+        activo:
+          type: boolean
+        creadoEn:
+          type: string
+          format: date-time
+
+    ClienteRequest:
+      type: object
+      required: [nombre]
+      properties:
+        nombre:
+          type: string
+        email:
+          type: string
+          format: email
+        telefono:
+          type: string
+        web:
+          type: string
+          format: uri
+        activo:
+          type: boolean
+
+    # ── CONFIGURACION ─────────────────────────
+
+    ConfiguracionCliente:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        tono:
+          type: string
+          example: Cercano y entusiasta
+        restricciones:
+          type: string
+          example: No mencionar precios de competidores
+        llamadaALaAccion:
+          type: string
+          description: Call to action predeterminada que Claude incluye en las publicaciones
+          example: "¡Apúntate en el enlace de la bio!"
+        actualizadoEn:
+          type: string
+          format: date-time
+
+    ConfiguracionClienteRequest:
+      type: object
+      properties:
+        tono:
+          type: string
+        restricciones:
+          type: string
+        llamadaALaAccion:
+          type: string
+
+    InstruccionPlataforma:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        plataforma:
+          $ref: '#/components/schemas/Plataforma'
+        instrucciones:
+          type: string
+          example: "Usa entre 3 y 5 hashtags. Empieza con un gancho emocional. Incluye la llamada a la acción al final."
+
+    InstruccionPlataformaRequest:
+      type: object
+      required: [instrucciones]
+      properties:
+        instrucciones:
+          type: string
+
+    # ── CREDENCIAL ────────────────────────────
+
+    Credencial:
+      type: object
+      description: Los tokens nunca se devuelven en claro — solo metadatos.
+      properties:
+        id:
+          type: string
+          format: uuid
+        plataforma:
+          $ref: '#/components/schemas/Plataforma'
+        expiraEn:
+          type: string
+          format: date-time
+        actualizadoEn:
+          type: string
+          format: date-time
+
+    CredencialRequest:
+      type: object
+      required: [accessToken]
+      properties:
+        accessToken:
+          type: string
+          description: Se cifra con AES antes de persistir. Nunca se devuelve en claro.
+        refreshToken:
+          type: string
+          description: Se cifra con AES antes de persistir. Nunca se devuelve en claro.
+        expiraEn:
+          type: string
+          format: date-time
+
+    # ── EVENTO ────────────────────────────────
+
+    Evento:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        clienteId:
+          type: string
+          format: uuid
+        nombre:
+          type: string
+          example: Milonga de verano
+        fechaEvento:
+          type: string
+          format: date
+        descripcion:
+          type: string
+        estado:
+          type: string
+          enum: [BORRADOR, ACTIVO, CERRADO]
+        creadoEn:
+          type: string
+          format: date-time
+
+    EventoRequest:
+      type: object
+      required: [clienteId, nombre]
+      properties:
+        clienteId:
+          type: string
+          format: uuid
+        nombre:
+          type: string
+        fechaEvento:
+          type: string
+          format: date
+        descripcion:
+          type: string
+        estado:
+          type: string
+          enum: [BORRADOR, ACTIVO, CERRADO]
+
+    # ── CONVERSACION ──────────────────────────
+
+    MensajeConversacion:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        rol:
+          $ref: '#/components/schemas/RolConversacion'
+        contenido:
+          type: string
+        enviadoEn:
+          type: string
+          format: date-time
+
+    MensajeRequest:
+      type: object
+      required: [contenido]
+      properties:
+        contenido:
+          type: string
+          example: Crea un post de Instagram para la milonga del sábado a las 21h
+
+    MensajeRespuesta:
+      type: object
+      properties:
+        mensaje:
+          $ref: '#/components/schemas/MensajeConversacion'
+        publicacionesCreadas:
+          type: array
+          description: IDs de publicaciones que Claude ha creado como efecto secundario via Tool Use
+          items:
+            type: string
+            format: uuid
+
+    # ── PUBLICACION ───────────────────────────
+
+    EstadoPublicacion:
+      type: string
+      enum: [PENDIENTE, APROBADA, RECHAZADA, ENVIADA]
+      description: |
+        Ciclo de vida:
+        PENDIENTE → APROBADA → ENVIADA
+        PENDIENTE → RECHAZADA
+
+    Publicacion:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        eventoId:
+          type: string
+          format: uuid
+        tipoPublicacion:
+          $ref: '#/components/schemas/TipoPublicacion'
+        textoGenerado:
+          type: string
+        estado:
+          $ref: '#/components/schemas/EstadoPublicacion'
+        idExterno:
+          type: string
+          description: ID devuelto por Meta o YouTube al enviar. Null hasta que se publique.
+        fechaEnvio:
+          type: string
+          format: date-time
+          description: Cuándo la app llamó a la API de la plataforma
+        fechaPublicacion:
+          type: string
+          format: date-time
+          description: |
+            Cuándo la plataforma publicará o publicó al público.
+            Igual que fechaEnvio en posts inmediatos.
+            Fecha futura en posts programados (programacionExterna=true).
+            Null en posts manuales (Blog Web).
+        feedbackUsuario:
+          type: string
+          description: Texto libre del usuario al solicitar cambios a Claude
+        creadoEn:
+          type: string
+          format: date-time
+
+    PublicacionRequest:
+      type: object
+      required: [eventoId, idTipoPublicacion, textoGenerado]
+      properties:
+        eventoId:
+          type: string
+          format: uuid
+        idTipoPublicacion:
+          type: string
+          format: uuid
+        textoGenerado:
+          type: string
+
+    PublicarRequest:
+      type: object
+      properties:
+        fechaPublicacion:
+          type: string
+          format: date-time
+          description: |
+            Fecha futura para publicación programada.
+            Solo se tiene en cuenta si programacionExterna=true en el tipo.
+            Si se omite, se publica de forma inmediata.
+
+    FeedbackRequest:
+      type: object
+      required: [feedback]
+      properties:
+        feedback:
+          type: string
+          example: El tono es demasiado formal, hazlo más cercano y añade emojis
+
+    # ── ADJUNTO ───────────────────────────────
+
+    Adjunto:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        tipoAdjunto:
+          $ref: '#/components/schemas/TipoAdjunto'
+        rutaFichero:
+          type: string
+        origen:
+          type: string
+          enum: [MANUAL, GENERADO]
+          description: MANUAL si lo subió el usuario, GENERADO si lo creó Ideogram
+        subidoEn:
+          type: string
+          format: date-time
+
+    # ── ERROR ─────────────────────────────────
+
+    Error:
+      type: object
+      properties:
+        codigo:
+          type: string
+        mensaje:
+          type: string
+        timestamp:
+          type: string
+          format: date-time
