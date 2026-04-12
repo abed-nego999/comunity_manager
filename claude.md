@@ -2,7 +2,7 @@
 
 ## Qué es este proyecto
 
-Aplicación web local (`localhost:8080`) en **Java 26 + Spring Boot 3.4.x** para gestionar y publicar contenido en redes sociales para múltiples clientes. El usuario es el único operador. **Claude genera contenido de forma autónoma mediante Tool Use** y el usuario supervisa y aprueba todo antes de publicar.
+Aplicación web local (`localhost:8080`) en **Java 25 + Spring Boot 3.4.x** para gestionar y publicar contenido en redes sociales para múltiples clientes. El usuario es el único operador. **Claude genera contenido de forma autónoma mediante Tool Use** y el usuario supervisa y aprueba todo antes de publicar.
 
 ---
 
@@ -20,16 +20,16 @@ Antes de escribir código, leer los ficheros en `/docs`:
 
 ## Stack tecnológico
 
-| Componente | Tecnología |
-|---|---|
-| Lenguaje | Java 26 |
-| Framework | Spring Boot 3.4.x |
-| Vistas | Thymeleaf |
-| Base de datos | H2 en modo fichero |
-| ORM | Spring Data JPA |
-| Utilidades | Lombok |
+| Componente | Tecnología                    |
+|---|-------------------------------|
+| Lenguaje | Java 25                       |
+| Framework | Spring Boot 3.4.x             |
+| Vistas | Thymeleaf                     |
+| Base de datos | H2 en modo fichero            |
+| ORM | Spring Data JPA               |
+| Utilidades | Lombok                        |
 | Paquete base | `com.esteban.comunitymanager` |
-| Repositorio | GitHub — `comunity_manager` |
+| Repositorio | GitHub — `comunity_manager`   |
 
 ---
 

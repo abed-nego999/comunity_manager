@@ -8,7 +8,29 @@
       "Bash(mvn dependency:tree -Dincludes=org.projectlombok:lombok)",
       "Bash(mvn spring-boot:run -Dspring-boot.run.profiles=dev)",
       "Bash(echo \"PID: $!\")",
-      "Bash(mvn package:*)"
+      "Bash(mvn package:*)",
+      "Bash(echo \"PID=$!\")",
+      "Bash(jar xf:*)",
+      "Bash(javap -verbose /tmp/org/springframework/asm/ClassReader.class)",
+      "Bash(unzip -o ~/.m2/repository/org/springframework/spring-core/6.2.6/spring-core-6.2.6.jar \"org/springframework/asm/ClassReader.class\" -d spring_core_extracted)",
+      "Bash(javap -verbose /tmp/spring_core_extracted/org/springframework/asm/ClassReader.class)",
+      "Bash(javap /tmp/spring_core_extracted/org/springframework/asm/ClassReader.class)",
+      "Read(//c/Users/Esteban/.m2/repository/org/springframework/boot/spring-boot-starter-parent/**)",
+      "Bash(mvn spring-boot:run \"-Dspring-boot.run.profiles=dev\")",
+      "Bash(taskkill /F /IM java.exe)",
+      "Bash(pkill -f \"ComunityManager\")",
+      "Bash(kill -9 1561)",
+      "Bash(echo \"Started in background with PID: $!\")",
+      "Bash(curl -s http://localhost:8080/v3/api-docs)",
+      "Bash(python -c \"import sys,json; d=json.load\\(sys.stdin\\); paths=list\\(d.get\\('paths',{}\\).keys\\(\\)\\); print\\('\\\\n'.join\\(sorted\\(paths\\)\\)\\)\")",
+      "Bash(python -c ':*)",
+      "Bash(curl -s http://localhost:8080/api/v1/plataformas)",
+      "Bash(curl -s http://localhost:8080/api/v1/tipos-publicacion)",
+      "Bash(curl -s http://localhost:8080/api/v1/roles-conversacion)",
+      "Bash(curl -s http://localhost:8080/api/v1/tipos-adjunto)",
+      "Bash(netstat -ano)",
+      "Bash(taskkill:*)",
+      "Bash(cmd:*)"
     ]
   }
 }

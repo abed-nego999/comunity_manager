@@ -7,7 +7,7 @@
     <parent>
         <groupId>org.springframework.boot</groupId>
         <artifactId>spring-boot-starter-parent</artifactId>
-        <version>3.4.1</version>
+        <version>3.4.5</version>
         <relativePath/>
     </parent>
 
@@ -18,7 +18,7 @@
     <description>Community Manager — gestión de contenido en redes sociales con IA</description>
 
     <properties>
-        <java.version>26</java.version>
+        <java.version>25</java.version>
         <springdoc.version>2.7.0</springdoc.version>
         <lombok.version>1.18.38</lombok.version>
     </properties>
@@ -100,6 +100,10 @@
                 <groupId>org.springframework.boot</groupId>
                 <artifactId>spring-boot-maven-plugin</artifactId>
                 <configuration>
+                    <!-- Necesario con Java 25: el ASM 9.7 incluido en Spring Boot 3.4.1
+                         no soporta bytecode de Java 25 (major version 69). Especificando
+                         mainClass se evita el escaneo ASM en MainClassFinder. -->
+                    <mainClass>com.esteban.comunitymanager.ComunityManagerApplication</mainClass>
                     <excludes>
                         <exclude>
                             <groupId>org.projectlombok</groupId>
