@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(mvn clean:*)",
+      "Bash(mvn dependency:resolve -q)",
+      "Bash(java -version)",
+      "Bash(mvn -version)",
+      "Bash(mvn dependency:tree -Dincludes=org.projectlombok:lombok)",
+      "Bash(mvn spring-boot:run -Dspring-boot.run.profiles=dev)",
+      "Bash(echo \"PID: $!\")",
+      "Bash(mvn package:*)"
+    ]
+  }
+}
