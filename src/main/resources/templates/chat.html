@@ -924,11 +924,20 @@
         // ── Fase 3: enviar mensaje a Claude ───────────────────────────────────
         const typingId = mostrarTyping();
 
+        // Añadir referencias explícitas a los adjuntos subidos en este turno
+        let contenidoEnviado = contenido;
+        if (adjuntosSubidos.length > 0) {
+            const refs = adjuntosSubidos
+                .map(a => `[Adjunto subido: ${a.nombreFichero} | ID: ${a.id}]`)
+                .join('\n');
+            contenidoEnviado = contenido + '\n' + refs;
+        }
+
         try {
             const respuesta = await fetchJson(`/api/v1/eventos/${eventoIdActivo}/conversacion`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ contenido })
+                body: JSON.stringify({ contenido: contenidoEnviado })
             });
 
             quitarTyping(typingId);

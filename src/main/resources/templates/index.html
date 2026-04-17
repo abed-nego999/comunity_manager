@@ -977,11 +977,21 @@ async function enviarMensaje() {
 
     // Fase 3: llamar a Claude
     const typingId = mostrarTyping();
+
+    // Añadir referencias explícitas a los adjuntos subidos en este turno
+    let contenidoEnviado = contenido;
+    if (adjuntosSubidos.length > 0) {
+        const refs = adjuntosSubidos
+            .map(a => `[Adjunto subido: ${a.nombreFichero} | ID: ${a.id}]`)
+            .join('\n');
+        contenidoEnviado = contenido + '\n' + refs;
+    }
+
     try {
         const respuesta = await fetchJson(`/api/v1/eventos/${chatEventoId}/conversacion`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ contenido })
+            body: JSON.stringify({ contenido: contenidoEnviado })
         });
         quitarTyping(typingId);
         agregarMensajeAlChat('Claude', respuesta.mensaje.contenido, respuesta.mensaje.enviadoEn, []);
@@ -998,28 +1008,43 @@ async function enviarMensaje() {
     }
 }
 
+// Elimina las referencias internas "[Adjunto subido: ... | ID: ...]" del texto visible
+function limpiarTextoMensaje(texto) {
+    return texto.replace(/\[Adjunto subido: .+? \| ID: [0-9a-f-]+\]\n?/g, '').trim();
+}
+
+// Genera el HTML de los adjuntos de un mensaje (historial o turno nuevo)
+function renderAdjuntos(adjuntos) {
+    if (!adjuntos || adjuntos.length === 0) return '';
+    const chips = adjuntos.map(adj => {
+        if (adj._pendiente) {
+            if (esImagen(adj.mime)) return `<div class="adjunto-upload-ph" data-pending title="${escapeHtml(adj.nombre)}"></div>`;
+            return `<span class="adjunto-chip" data-pending>${esPdf(adj.mime)?'📄':'🖼'} <span class="adjunto-chip-nombre">${escapeHtml(adj.nombre)}</span></span>`;
+        }
+        const mime = adj.tipoMime || adj.mime || '';
+        const nombre = adj.nombreFichero || adj.nombre || '';
+        const ruta = adj.rutaFichero || '';
+        if (esImagen(mime)) {
+            const url = '/api/v1/ficheros?ruta=' + encodeURIComponent(ruta);
+            return `<a href="${url}" target="_blank" rel="noopener noreferrer" style="display:inline-block">` +
+                   `<img src="${url}" alt="${escapeHtml(nombre)}" title="${escapeHtml(nombre)}" ` +
+                   `style="max-width:160px;max-height:120px;object-fit:cover;border-radius:8px;cursor:pointer;margin-top:4px"></a>`;
+        }
+        const icono = esPdf(mime) ? '📄' : esVideo(mime) ? '🎬' : '🖼';
+        return `<span class="adjunto-chip">${icono} <a href="/api/v1/ficheros?ruta=${encodeURIComponent(ruta)}" ` +
+               `target="_blank" rel="noopener noreferrer" class="adjunto-chip-nombre" title="${escapeHtml(nombre)}">${escapeHtml(nombre)}</a></span>`;
+    }).join('');
+    return `<div class="mensaje-adjuntos">${chips}</div>`;
+}
+
 function agregarMensajeAlChat(rol, contenido, timestamp, adjuntos) {
     const esClaude = rol === 'Claude';
     const div = document.createElement('div');
     div.className = 'mensaje ' + (esClaude ? 'claude' : 'usuario');
     const hora = timestamp ? formatearHora(timestamp) : '';
-    let adjuntosHtml = '';
-    if (adjuntos && adjuntos.length > 0) {
-        const chips = adjuntos.map(adj => {
-            if (adj._pendiente) {
-                if (esImagen(adj.mime)) return `<div class="adjunto-upload-ph" data-pending title="${escapeHtml(adj.nombre)}"></div>`;
-                return `<span class="adjunto-chip" data-pending>${esPdf(adj.mime)?'📄':'🖼'} <span class="adjunto-chip-nombre">${escapeHtml(adj.nombre)}</span></span>`;
-            } else if (esImagen(adj.tipoMime)) {
-                const url = '/api/v1/ficheros?ruta=' + encodeURIComponent(adj.rutaFichero);
-                return `<a href="${url}" target="_blank" rel="noopener noreferrer" style="display:inline-block"><img src="${url}" alt="${escapeHtml(adj.nombreFichero)}" title="${escapeHtml(adj.nombreFichero)}" class="adjunto-img-thumb"></a>`;
-            } else {
-                const icono = esPdf(adj.tipoMime) ? '📄' : '🖼';
-                return `<span class="adjunto-chip">${icono} <a href="/api/v1/ficheros?ruta=${encodeURIComponent(adj.rutaFichero)}" target="_blank" rel="noopener noreferrer" class="adjunto-chip-nombre" title="${escapeHtml(adj.nombreFichero)}">${escapeHtml(adj.nombreFichero)}</a></span>`;
-            }
-        }).join('');
-        adjuntosHtml = `<div class="mensaje-adjuntos">${chips}</div>`;
-    }
-    div.innerHTML = `<div class="mensaje-burbuja">${escapeHtml(contenido)}${adjuntosHtml}</div><div class="mensaje-meta">${esClaude?'Claude':'Tú'}${hora?' · '+hora:''}</div>`;
+    const textoVisible = limpiarTextoMensaje(contenido);
+    const adjuntosHtml = renderAdjuntos(adjuntos);
+    div.innerHTML = `<div class="mensaje-burbuja">${escapeHtml(textoVisible)}${adjuntosHtml}</div><div class="mensaje-meta">${esClaude?'Claude':'Tú'}${hora?' · '+hora:''}</div>`;
     mensajesDiv.appendChild(div);
     return div;
 }
@@ -1453,8 +1478,7 @@ function evCrearTarjetaPub(pub, tab) {
     texto.textContent = pub.textoGenerado || '';
     card.appendChild(texto);
 
-    const conAdjuntos = (tab === 'PENDIENTE' || tab === 'APROBADA') && pub.estado !== 'ENVIADA';
-    if (conAdjuntos) {
+    {
         const adjDiv = document.createElement('div');
         adjDiv.className = 'pub-adjuntos';
         adjDiv.id = 'adjuntos-' + pub.id;
@@ -1484,7 +1508,9 @@ function evAdjuntarBotones(container, pub) {
         container.appendChild(btn('✎ Pedir cambios', 'btn-cambios',    () => evAbrirModalFeedback(pub.id)));
         container.appendChild(btn('+ Imagen',        'btn-anadir-img', () => evIniciarSubidaAdjunto(pub.id)));
     } else if (pub.estado === 'APROBADA') {
-        container.appendChild(btn('↑ Publicar', 'btn-publicar', () => evPublicar(pub.id)));
+        if (pub.tipoPublicacion?.publicacionAutomatica) {
+            container.appendChild(btn('↑ Publicar', 'btn-publicar', () => evPublicar(pub.id)));
+        }
         container.appendChild(btn('✗ Rechazar', 'btn-rechazar', () => evRechazar(pub.id)));
     }
 }
@@ -1742,6 +1768,7 @@ async function fetchDelete(url) {
 
 function esPdf(mime)    { return mime === 'application/pdf'; }
 function esImagen(mime) { return !!mime && mime.startsWith('image/'); }
+function esVideo(mime)  { return mime === 'video/mp4'; }
 
 function escapeHtml(str) {
     if (!str) return '';

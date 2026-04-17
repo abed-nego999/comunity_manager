@@ -99,6 +99,10 @@ public class StorageService {
         return Files.readAllBytes(ruta);
     }
 
+    public boolean existeFichero(String rutaRelativa) {
+        return Files.exists(Paths.get(basePath, rutaRelativa));
+    }
+
     /**
      * Elimina el fichero indicado por su ruta relativa al basePath.
      * No lanza excepción si el fichero no existe.

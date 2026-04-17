@@ -47,7 +47,8 @@
       "Bash(pkill -f \"comunitymanager\")",
       "Bash(mvn spring-boot:run -Dspring-boot.run.profiles=dev -q)",
       "Bash(curl *)",
-      "Bash(kill %1)"
+      "Bash(kill %1)",
+      "Bash(python -m json.tool)"
     ]
   }
 }

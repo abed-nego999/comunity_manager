@@ -12,15 +12,26 @@ import com.esteban.comunitymanager.exception.ResourceNotFoundException;
 import com.esteban.comunitymanager.model.*;
 import com.esteban.comunitymanager.repository.*;
 import lombok.RequiredArgsConstructor;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 @Service
 @RequiredArgsConstructor
 public class EventoService {
+
+    private static final Logger log = LoggerFactory.getLogger(EventoService.class);
+
+    // Extrae UUIDs de adjuntos de las líneas "[Adjunto subido: nombre | ID: uuid]"
+    private static final Pattern ADJUNTO_REF_PATTERN =
+            Pattern.compile("\\[Adjunto subido: .+? \\| ID: ([0-9a-f\\-]+)\\]");
 
     private final EventoRepository eventoRepository;
     private final ClienteRepository clienteRepository;
@@ -84,6 +95,7 @@ public class EventoService {
                             .flatMap(am -> adjuntoRepository.findById(am.getIdAdjunto()).stream())
                             .map(AdjuntoResponse::from)
                             .toList();
+                    log.debug("[Historial] Mensaje {}: {} adjuntos", m.getId(), adjuntos.size());
                     return MensajeConversacionResponse.from(m, adjuntos);
                 })
                 .toList();
@@ -113,6 +125,9 @@ public class EventoService {
                 .contenido(request.getContenido())
                 .build());
 
+        // Enlazar adjuntos referenciados en el mensaje via ADJUNTO_MENSAJE
+        vincularAdjuntosDelMensaje(mensajeUsuario.getId(), request.getContenido());
+
         // Obtener historial completo (incluyendo el mensaje recién guardado)
         List<MensajeConversacion> historial =
                 mensajeRepository.findByEventoIdOrderByEnviadoEnAsc(idEvento);
@@ -138,6 +153,30 @@ public class EventoService {
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────
+
+    /**
+     * Parsea las líneas "[Adjunto subido: nombre | ID: uuid]" del contenido del mensaje
+     * y crea registros ADJUNTO_MENSAJE para cada UUID encontrado que exista en BBDD.
+     */
+    private void vincularAdjuntosDelMensaje(UUID mensajeId, String contenido) {
+        if (contenido == null || contenido.isBlank()) return;
+        Matcher matcher = ADJUNTO_REF_PATTERN.matcher(contenido);
+        List<UUID> encontrados = new ArrayList<>();
+        while (matcher.find()) {
+            try { encontrados.add(UUID.fromString(matcher.group(1))); }
+            catch (IllegalArgumentException ignored) { /* UUID malformado — ignorar */ }
+        }
+        for (UUID adjuntoId : encontrados) {
+            if (adjuntoRepository.existsById(adjuntoId)
+                    && !adjuntoMensajeRepository.existsByIdAdjuntoAndIdMensaje(adjuntoId, mensajeId)) {
+                adjuntoMensajeRepository.save(AdjuntoMensaje.builder()
+                        .idAdjunto(adjuntoId)
+                        .idMensaje(mensajeId)
+                        .build());
+                log.debug("[Historial] Adjunto {} vinculado al mensaje {}", adjuntoId, mensajeId);
+            }
+        }
+    }
 
     Evento buscarEvento(UUID id) {
         return eventoRepository.findById(id)

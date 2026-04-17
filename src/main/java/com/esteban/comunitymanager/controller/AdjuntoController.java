@@ -50,6 +50,12 @@ public class AdjuntoController {
         return ResponseEntity.ok(adjuntoService.listarPorEvento(id));
     }
 
+    @DeleteMapping("/api/v1/eventos/{id}/adjuntos/huerfanos")
+    public ResponseEntity<Void> limpiarAdjuntosHuerfanos(@PathVariable UUID id) {
+        adjuntoService.limpiarHuerfanos(id);
+        return ResponseEntity.noContent().build();
+    }
+
     // ── Adjuntos de publicación ───────────────────────────────────────────────
 
     @PostMapping(value = "/api/v1/publicaciones/{id}/adjuntos", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)

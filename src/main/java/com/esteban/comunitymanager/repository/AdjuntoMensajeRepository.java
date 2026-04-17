@@ -11,4 +11,5 @@ public interface AdjuntoMensajeRepository extends JpaRepository<AdjuntoMensaje, 
     List<AdjuntoMensaje> findByIdMensaje(UUID idMensaje);
     void deleteByIdAdjuntoAndIdMensaje(UUID idAdjunto, UUID idMensaje);
     boolean existsByIdAdjunto(UUID idAdjunto);
+    boolean existsByIdAdjuntoAndIdMensaje(UUID idAdjunto, UUID idMensaje);
 }

@@ -140,6 +140,8 @@ public class AdjuntoService {
         // Generar descripción IA si no la tiene (llamada síncrona — el frontend espera)
         procesarDescripcionSiNecesario(adjunto);
 
+        limpiarHuerfanos(eventoId);
+
         return AdjuntoResponse.from(adjunto);
     }
 
@@ -274,6 +276,41 @@ public class AdjuntoService {
             storageService.eliminarFichero(adjunto.getRutaFichero());
             adjuntoRepository.delete(adjunto);
         }
+    }
+
+    // ── Limpieza de huérfanos ─────────────────────────────────────────────────
+
+    /**
+     * Elimina registros ADJUNTO del evento que cumplan las 4 condiciones simultáneamente:
+     * - descripcion_ia == null (nunca se procesaron)
+     * - Sin entradas en ADJUNTO_PUBLICACION
+     * - Sin entradas en ADJUNTO_MENSAJE
+     * - El fichero físico ya no existe en disco
+     *
+     * Son restos de subidas fallidas o interrumpidas. Se pueden borrar sin riesgo.
+     */
+    @Transactional
+    public int limpiarHuerfanos(UUID eventoId) {
+        buscarEvento(eventoId);
+        List<Adjunto> candidatos = adjuntoRepository.findByEventoIdAndDescripcionIaIsNull(eventoId);
+        int borrados = 0;
+        for (Adjunto adj : candidatos) {
+            boolean tieneReferencias =
+                    !adjuntoPublicacionRepository.findByIdAdjunto(adj.getId()).isEmpty()
+                    || adjuntoMensajeRepository.existsByIdAdjunto(adj.getId());
+            if (tieneReferencias) continue;
+
+            if (storageService.existeFichero(adj.getRutaFichero())) {
+                // Fichero en disco sin descripción — intentar describirlo en lugar de eliminarlo
+                procesarDescripcionSiNecesario(adj);
+            } else {
+                // Sin fichero ni referencias — huérfano real: limpiar el registro
+                adjuntoRepository.delete(adj);
+                borrados++;
+                log.info("[Adjunto] Huérfano eliminado: {} ({})", adj.getNombreFichero(), adj.getId());
+            }
+        }
+        return borrados;
     }
 
     // ── Listados ──────────────────────────────────────────────────────────────

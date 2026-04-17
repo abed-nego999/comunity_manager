@@ -17,6 +17,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.Resource;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
+import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestClient;
 
 import java.io.IOException;
@@ -45,7 +46,7 @@ public class ClaudeServiceImpl implements ClaudeService {
     private static final String ANTHROPIC_URL = "https://api.anthropic.com/v1/messages";
     private static final String MODEL = "claude-sonnet-4-6";
     private static final int MAX_TOKENS = 8096;
-    private static final int MAX_TOKENS_DESCRIPCION = 1024;
+    private static final int MAX_TOKENS_DESCRIPCION = 200;
     private static final int MAX_ITERACIONES = 10;
 
     @Value("${ANTHROPIC_API_KEY:}")
@@ -118,6 +119,14 @@ public class ClaudeServiceImpl implements ClaudeService {
 
         // Mensajes solo como texto plano — sin ningún bloque base64
         List<Object> messages = buildMessages(historial);
+
+        // Log del último mensaje del usuario antes de enviarlo a Anthropic
+        if (!messages.isEmpty()) {
+            Object ultimo = messages.get(messages.size() - 1);
+            String preview = ultimo.toString();
+            log.info("[Claude] Último msg → Anthropic: {}",
+                    preview.length() > 200 ? preview.substring(0, 200) + "…" : preview);
+        }
 
         List<UUID> publicacionesCreadas = new ArrayList<>();
         String textoFinal = "";
@@ -194,9 +203,10 @@ public class ClaudeServiceImpl implements ClaudeService {
             );
             Map<String, Object> fileBlock = Map.of("type", blockType, "source", source);
             Map<String, Object> textBlock = Map.of("type", "text", "text",
-                    "Describe esta imagen con el máximo detalle posible. "
-                    + "Incluye colores, personas, objetos, texto visible, ambiente "
-                    + "y cualquier elemento relevante para generar contenido de redes sociales.");
+                    "Describe esta imagen en 3-5 líneas máximo. Incluye: "
+                    + "personas (número, vestimenta, actitud), lugar/ambiente, "
+                    + "colores principales y cualquier texto visible. "
+                    + "Sin formato, sin listas, solo texto plano.");
 
             Map<String, Object> message = Map.of("role", "user",
                     "content", List.of(fileBlock, textBlock));
@@ -250,7 +260,9 @@ public class ClaudeServiceImpl implements ClaudeService {
                         .append(" | ").append(a.getNombreFichero())
                         .append(" | ").append(a.getTipoMime());
                 if (a.getDescripcionIa() != null && !a.getDescripcionIa().isBlank()) {
-                    sb.append(" | Descripción: ").append(a.getDescripcionIa());
+                    String desc = a.getDescripcionIa();
+                    if (desc.length() > 300) desc = desc.substring(0, 297) + "...";
+                    sb.append(" | Descripción: ").append(desc);
                 } else {
                     sb.append(" | (sin descripción)");
                 }
@@ -318,16 +330,30 @@ public class ClaudeServiceImpl implements ClaudeService {
     // ── Llamada HTTP ──────────────────────────────────────────────────────────
 
     private JsonNode llamarAnthropicApi(Map<String, Object> body) {
-        try {
-            return anthropicClient.post()
-                    .contentType(MediaType.APPLICATION_JSON)
-                    .body(body)
-                    .retrieve()
-                    .body(JsonNode.class);
-        } catch (Exception e) {
-            log.error("[Claude] Error en la llamada a la API de Anthropic: {}", e.getMessage(), e);
-            throw new RuntimeException("Error comunicándose con Claude: " + e.getMessage(), e);
+        for (int intento = 0; intento <= 1; intento++) {
+            try {
+                return anthropicClient.post()
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .body(body)
+                        .retrieve()
+                        .body(JsonNode.class);
+            } catch (HttpClientErrorException e) {
+                if (e.getStatusCode().value() == 429 && intento == 0) {
+                    log.info("[Claude] Rate limit alcanzado, reintentando en 60s...");
+                    try { Thread.sleep(60_000); } catch (InterruptedException ie) { Thread.currentThread().interrupt(); }
+                    continue;
+                }
+                if (e.getStatusCode().value() == 429) {
+                    throw new RuntimeException("Claude está ocupado, espera un momento y reintenta.", e);
+                }
+                log.error("[Claude] Error HTTP en la llamada a Anthropic: {} {}", e.getStatusCode(), e.getMessage());
+                throw new RuntimeException("Error comunicándose con Claude: " + e.getMessage(), e);
+            } catch (Exception e) {
+                log.error("[Claude] Error en la llamada a la API de Anthropic: {}", e.getMessage(), e);
+                throw new RuntimeException("Error comunicándose con Claude: " + e.getMessage(), e);
+            }
         }
+        throw new RuntimeException("Claude está ocupado, espera un momento y reintenta.");
     }
 
     // ── Ejecución de herramientas ─────────────────────────────────────────────

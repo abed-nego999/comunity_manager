@@ -13,4 +13,6 @@ public interface AdjuntoRepository extends JpaRepository<Adjunto, UUID> {
 
     Optional<Adjunto> findByEventoIdAndRutaFichero(UUID eventoId, String rutaFichero);
 
+    List<Adjunto> findByEventoIdAndDescripcionIaIsNull(UUID eventoId);
+
 }
