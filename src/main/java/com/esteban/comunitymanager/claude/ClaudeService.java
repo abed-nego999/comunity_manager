@@ -1,5 +1,6 @@
 package com.esteban.comunitymanager.claude;
 
+import com.esteban.comunitymanager.model.Adjunto;
 import com.esteban.comunitymanager.model.MensajeConversacion;
 
 import java.util.List;
@@ -25,4 +26,11 @@ public interface ClaudeService {
      * @return               Texto de respuesta + IDs de publicaciones creadas via Tool Use
      */
     ClaudeRespuesta enviarConversacion(String systemPrompt, List<MensajeConversacion> historial, UUID eventoId);
+
+    /**
+     * Hace una llamada minimalista a Anthropic para obtener una descripción textual
+     * del adjunto (imagen o PDF). Sin historial, sin system prompt complejo.
+     * Devuelve la descripción o cadena vacía si falla.
+     */
+    String describirAdjunto(Adjunto adjunto);
 }

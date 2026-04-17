@@ -6,6 +6,7 @@ import com.esteban.comunitymanager.dto.request.EventoRequest;
 import com.esteban.comunitymanager.dto.request.MensajeRequest;
 import com.esteban.comunitymanager.dto.response.EventoResponse;
 import com.esteban.comunitymanager.dto.response.MensajeConversacionResponse;
+import com.esteban.comunitymanager.dto.response.AdjuntoResponse;
 import com.esteban.comunitymanager.dto.response.MensajeRespuestaResponse;
 import com.esteban.comunitymanager.exception.ResourceNotFoundException;
 import com.esteban.comunitymanager.model.*;
@@ -27,6 +28,8 @@ public class EventoService {
     private final RolConversacionRepository rolRepository;
     private final ConfiguracionClienteRepository configuracionRepository;
     private final InstruccionPlataformaRepository instruccionRepository;
+    private final AdjuntoRepository adjuntoRepository;
+    private final AdjuntoMensajeRepository adjuntoMensajeRepository;
     private final ClaudeService claudeService;
 
     @Transactional(readOnly = true)
@@ -51,7 +54,7 @@ public class EventoService {
                 .nombre(request.getNombre())
                 .fechaEvento(request.getFechaEvento())
                 .descripcion(request.getDescripcion())
-                .estado(request.getEstado() != null ? request.getEstado() : EstadoEvento.BORRADOR)
+                .estado(request.getEstado() != null ? request.getEstado() : EstadoEvento.ACTIVO)
                 .build());
 
         return EventoResponse.from(evento);
@@ -75,7 +78,14 @@ public class EventoService {
     public List<MensajeConversacionResponse> obtenerConversacion(UUID idEvento) {
         buscarEvento(idEvento); // verifica que el evento exista
         return mensajeRepository.findByEventoIdOrderByEnviadoEnAsc(idEvento).stream()
-                .map(MensajeConversacionResponse::from)
+                .map(m -> {
+                    List<AdjuntoResponse> adjuntos = adjuntoMensajeRepository.findByIdMensaje(m.getId())
+                            .stream()
+                            .flatMap(am -> adjuntoRepository.findById(am.getIdAdjunto()).stream())
+                            .map(AdjuntoResponse::from)
+                            .toList();
+                    return MensajeConversacionResponse.from(m, adjuntos);
+                })
                 .toList();
     }
 
@@ -97,7 +107,7 @@ public class EventoService {
                 .orElseThrow(() -> new ResourceNotFoundException("Rol 'Claude' no encontrado en catálogo"));
 
         // Guardar mensaje del usuario
-        mensajeRepository.save(MensajeConversacion.builder()
+        MensajeConversacion mensajeUsuario = mensajeRepository.save(MensajeConversacion.builder()
                 .evento(evento)
                 .rol(rolUsuario)
                 .contenido(request.getContenido())
@@ -121,7 +131,8 @@ public class EventoService {
                 .build());
 
         return MensajeRespuestaResponse.builder()
-                .mensaje(MensajeConversacionResponse.from(mensajeClaude))
+                .mensajeUsuarioId(mensajeUsuario.getId())
+                .mensaje(MensajeConversacionResponse.from(mensajeClaude, List.of()))
                 .publicacionesCreadas(claudeRespuesta.getPublicacionesCreadas())
                 .build();
     }

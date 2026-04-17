@@ -20,6 +20,7 @@ public class PublicacionResponse {
     private EstadoPublicacion estado;
     /** ID devuelto por Meta o YouTube al publicar. Null hasta que se envíe. */
     private String idExterno;
+    private Instant fechaGeneracion;
     private Instant fechaEnvio;
     private Instant fechaPublicacion;
     private String feedbackUsuario;
@@ -33,6 +34,7 @@ public class PublicacionResponse {
                 .textoGenerado(p.getTextoGenerado())
                 .estado(p.getEstado())
                 .idExterno(p.getIdExterno())
+                .fechaGeneracion(p.getFechaGeneracion())
                 .fechaEnvio(p.getFechaEnvio())
                 .fechaPublicacion(p.getFechaPublicacion())
                 .feedbackUsuario(p.getFeedbackUsuario())

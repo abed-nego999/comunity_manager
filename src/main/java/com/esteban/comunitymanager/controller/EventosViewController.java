@@ -6,16 +6,20 @@ import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.GetMapping;
 
+/**
+ * Controlador de la vista de eventos.
+ * Renderiza el panel de gestión de eventos con listado, detalle y acciones de publicación.
+ */
 @Controller
 @RequiredArgsConstructor
-public class HomeController {
+public class EventosViewController {
 
     private final ClienteService clienteService;
 
-    @GetMapping("/")
-    public String home(Model model) {
+    @GetMapping("/eventos")
+    public String eventos(Model model) {
         model.addAttribute("clientes", clienteService.listarClientes());
-        model.addAttribute("initialPanel", "chat");
+        model.addAttribute("initialPanel", "eventos");
         return "index";
     }
 }

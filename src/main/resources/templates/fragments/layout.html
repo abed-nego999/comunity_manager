@@ -1,0 +1,359 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org"
+      xmlns:layout="http://www.ultraq.net.nz/thymeleaf/layout"
+      lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title layout:title-pattern="$CONTENT_TITLE — Community Manager">Community Manager</title>
+    <style>
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+        html {
+            width: 100%;
+            height: 100%;
+        }
+
+        body {
+            width: 100%;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            height: 100vh;
+            display: flex;
+            overflow: hidden;
+            color: #1c1e21;
+        }
+
+        /* ── Sidebar ─────────────────────────────────────────────────────────── */
+        .sidebar {
+            width: 60px;
+            min-width: 60px;
+            background: #1e1e2e;
+            color: #cdd6f4;
+            display: flex;
+            flex-direction: column;
+            transition: width 0.25s ease, min-width 0.25s ease;
+            overflow: hidden;
+            flex-shrink: 0;
+            z-index: 10;
+        }
+
+        .sidebar.expanded {
+            width: 220px;
+            min-width: 220px;
+        }
+
+        /* Header del sidebar con toggle */
+        .sidebar-header {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 14px 10px;
+            border-bottom: 1px solid rgba(255,255,255,.08);
+            flex-shrink: 0;
+            gap: 8px;
+        }
+
+        .sidebar.expanded .sidebar-header {
+            justify-content: space-between;
+        }
+
+        .sidebar-logo {
+            font-weight: 700;
+            font-size: 12px;
+            color: #cba6f7;
+            white-space: nowrap;
+            overflow: hidden;
+            max-width: 0;
+            opacity: 0;
+            transition: max-width 0.25s ease, opacity 0.2s ease;
+        }
+
+        .sidebar.expanded .sidebar-logo {
+            max-width: 160px;
+            opacity: 1;
+        }
+
+        .sidebar-toggle {
+            background: none;
+            border: none;
+            color: #cdd6f4;
+            cursor: pointer;
+            width: 32px;
+            height: 32px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 6px;
+            flex-shrink: 0;
+            transition: background .15s;
+        }
+
+        .sidebar-toggle:hover { background: rgba(255,255,255,.1); }
+
+        .sidebar-toggle svg {
+            transition: transform 0.25s;
+        }
+
+        .sidebar.expanded .sidebar-toggle svg {
+            transform: rotate(180deg);
+        }
+
+        /* Selector de cliente */
+        .cliente-selector {
+            padding: 10px 8px;
+            border-bottom: 1px solid rgba(255,255,255,.08);
+            flex-shrink: 0;
+        }
+
+        .cliente-label {
+            font-size: 10px;
+            text-transform: uppercase;
+            letter-spacing: .08em;
+            color: #6c7086;
+            margin-bottom: 5px;
+            white-space: nowrap;
+            overflow: hidden;
+            max-height: 0;
+            opacity: 0;
+            transition: max-height 0.2s, opacity 0.2s;
+        }
+
+        .sidebar.expanded .cliente-label {
+            max-height: 20px;
+            opacity: 1;
+        }
+
+        .cliente-abrev {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 40px;
+            height: 32px;
+            background: rgba(124,106,247,.2);
+            border-radius: 6px;
+            font-size: 13px;
+            font-weight: 700;
+            color: #cba6f7;
+            cursor: default;
+            margin: 0 auto;
+        }
+
+        .sidebar.expanded .cliente-abrev {
+            display: none;
+        }
+
+        #clienteGlobal {
+            display: none;
+            width: 100%;
+            background: rgba(255,255,255,.08);
+            color: #cdd6f4;
+            border: 1px solid rgba(255,255,255,.12);
+            border-radius: 6px;
+            padding: 6px 8px;
+            font-size: 12px;
+            cursor: pointer;
+            outline: none;
+            font-family: inherit;
+        }
+
+        #clienteGlobal:focus { border-color: #7c6af7; }
+        #clienteGlobal option { background: #2a2a3e; color: #cdd6f4; }
+
+        .sidebar.expanded #clienteGlobal {
+            display: block;
+        }
+
+        /* Navegación */
+        .sidebar-nav {
+            flex: 1;
+            padding: 8px 0;
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+            overflow-y: auto;
+        }
+
+        .nav-item {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 11px 10px;
+            color: #a6adc8;
+            text-decoration: none;
+            transition: background .15s, color .15s;
+            white-space: nowrap;
+            overflow: hidden;
+            background: none;
+            border: none;
+            cursor: pointer;
+            font-family: inherit;
+            width: 100%;
+        }
+
+        .nav-item:hover {
+            background: rgba(255,255,255,.07);
+            color: #cdd6f4;
+        }
+
+        .nav-item.active {
+            background: rgba(124,106,247,.2);
+            color: #cba6f7;
+            font-weight: 600;
+            border-right: 3px solid #7c6af7;
+        }
+
+        .nav-emoji {
+            font-size: 17px;
+            flex-shrink: 0;
+            width: 24px;
+            text-align: center;
+            line-height: 1;
+        }
+
+        .nav-label {
+            font-size: 13px;
+            opacity: 0;
+            transition: opacity 0.2s;
+        }
+
+        .sidebar.expanded .nav-label { opacity: 1; }
+
+        /* ── Área de contenido ───────────────────────────────────────────────── */
+        .content-area {
+            flex: 1;
+            background: #f8f8f6;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            min-width: 0;
+        }
+
+        /* ── Responsive ──────────────────────────────────────────────────────── */
+        @media (max-width: 768px) {
+            .sidebar.expanded {
+                position: absolute;
+                height: 100vh;
+                box-shadow: 4px 0 16px rgba(0,0,0,.4);
+            }
+        }
+    </style>
+</head>
+<body>
+
+<!-- ── Barra lateral ─────────────────────────────────────────────────────── -->
+<nav class="sidebar" id="sidebar">
+
+    <!-- Header: logo + toggle -->
+    <div class="sidebar-header">
+        <span class="sidebar-logo">Community Mgr</span>
+        <button class="sidebar-toggle" id="sidebarToggle" title="Expandir / colapsar barra">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                 stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="9 18 15 12 9 6"/>
+            </svg>
+        </button>
+    </div>
+
+    <!-- Selector de cliente activo -->
+    <div class="cliente-selector">
+        <div class="cliente-label">Cliente activo</div>
+        <div class="cliente-abrev" id="clienteAbrev" title="Selecciona un cliente">?</div>
+        <select id="clienteGlobal">
+            <option value="">— Selecciona cliente —</option>
+            <option th:each="c : ${clientes}"
+                    th:value="${c.id}"
+                    th:text="${c.nombre}">Cliente</option>
+        </select>
+    </div>
+
+    <!-- Navegación -->
+    <nav class="sidebar-nav">
+        <button class="nav-item" id="navChat" onclick="typeof navegarA==='function'&&navegarA('chat')">
+            <span class="nav-emoji">💬</span>
+            <span class="nav-label">Chat</span>
+        </button>
+        <button class="nav-item" id="navEventos" onclick="typeof navegarA==='function'&&navegarA('eventos')">
+            <span class="nav-emoji">📅</span>
+            <span class="nav-label">Eventos</span>
+        </button>
+    </nav>
+
+</nav>
+
+<!-- ── Área de contenido ─────────────────────────────────────────────────── -->
+<main class="content-area" layout:fragment="content">
+    <!-- El template hijo inyecta su contenido aquí -->
+</main>
+
+<!-- ── Scripts del layout ────────────────────────────────────────────────── -->
+<script>
+    (function () {
+        const sidebar       = document.getElementById('sidebar');
+        const toggle        = document.getElementById('sidebarToggle');
+        const clienteAbrev  = document.getElementById('clienteAbrev');
+        const clienteSelect = document.getElementById('clienteGlobal');
+
+        // ── Restaurar estado del sidebar ──────────────────────────────────────
+        if (localStorage.getItem('sidebarExpanded') === 'true') {
+            sidebar.classList.add('expanded');
+        }
+
+        toggle.addEventListener('click', () => {
+            sidebar.classList.toggle('expanded');
+            localStorage.setItem('sidebarExpanded', sidebar.classList.contains('expanded'));
+        });
+
+        // ── Selector de cliente ───────────────────────────────────────────────
+        function calcAbrev(nombre) {
+            if (!nombre) return '?';
+            return nombre.split(/\s+/)
+                .filter(w => /\p{L}/u.test(w[0] || ''))
+                .map(w => w[0].toUpperCase())
+                .slice(0, 2)
+                .join('') || nombre[0].toUpperCase();
+        }
+
+        function setCliente(id, nombre) {
+            clienteAbrev.textContent = id ? calcAbrev(nombre) : '?';
+            clienteAbrev.title = nombre || 'Selecciona un cliente';
+        }
+
+        // Restaurar cliente guardado
+        const savedId = localStorage.getItem('clienteActivoId') || '';
+        if (savedId && clienteSelect) {
+            clienteSelect.value = savedId;
+            const opt = clienteSelect.options[clienteSelect.selectedIndex];
+            if (opt && opt.value) {
+                setCliente(opt.value, opt.text);
+                // Sincronizar a sessionStorage para que las vistas lo lean en la misma pestaña
+                sessionStorage.setItem('clienteActivoId', savedId);
+            }
+        }
+
+        clienteSelect.addEventListener('change', () => {
+            const id     = clienteSelect.value;
+            const nombre = id ? clienteSelect.options[clienteSelect.selectedIndex].text : '';
+            localStorage.setItem('clienteActivoId',     id);
+            localStorage.setItem('clienteActivoNombre', nombre);
+            sessionStorage.setItem('clienteActivoId', id);
+            setCliente(id, nombre);
+            document.dispatchEvent(new CustomEvent('clienteGlobalChanged', {
+                detail: { clienteId: id, nombre }
+            }));
+        });
+
+        // Disparar el evento en la carga inicial si hay cliente guardado
+        if (savedId) {
+            const nombre = localStorage.getItem('clienteActivoNombre') || '';
+            document.dispatchEvent(new CustomEvent('clienteGlobalChanged', {
+                detail: { clienteId: savedId, nombre }
+            }));
+        }
+    })();
+</script>
+
+<!-- Scripts adicionales de los templates hijos -->
+<th:block layout:fragment="scripts"></th:block>
+
+</body>
+</html>

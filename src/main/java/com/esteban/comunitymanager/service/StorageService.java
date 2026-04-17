@@ -7,6 +7,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -44,6 +45,21 @@ public class StorageService {
         return resolverRuta(idCliente, nombreCliente, idEvento, nombreEvento, "generados", nombreFichero);
     }
 
+    public Path resolverRutaContexto(UUID idCliente, String nombreCliente,
+                                     UUID idEvento, String nombreEvento,
+                                     String nombreFichero) {
+        return resolverRuta(idCliente, nombreCliente, idEvento, nombreEvento, "contexto", nombreFichero);
+    }
+
+    /**
+     * Devuelve la ruta del fichero de backup de configuración del cliente.
+     * storage/clientes/{id}_{nombre}/config-backup.json
+     */
+    public Path resolverRutaConfigBackup(UUID idCliente, String nombreCliente) {
+        String dirCliente = idCliente + "_" + sanitizarNombre(nombreCliente);
+        return Paths.get(basePath, "clientes", dirCliente, "config-backup.json");
+    }
+
     private Path resolverRuta(UUID idCliente, String nombreCliente,
                                UUID idEvento, String nombreEvento,
                                String subcarpeta, String nombreFichero) {
@@ -64,6 +80,23 @@ public class StorageService {
         Files.copy(fichero.getInputStream(), destino, StandardCopyOption.REPLACE_EXISTING);
         log.debug("Fichero guardado en: {}", destino);
         return Paths.get(basePath).relativize(destino).toString().replace("\\", "/");
+    }
+
+    /**
+     * Escribe un String (JSON) en la ruta indicada, creando los directorios necesarios.
+     */
+    public void guardarJson(String contenido, Path destino) throws IOException {
+        Files.createDirectories(destino.getParent());
+        Files.writeString(destino, contenido, StandardCharsets.UTF_8);
+        log.debug("JSON guardado en: {}", destino);
+    }
+
+    /**
+     * Lee el contenido de un fichero dado su ruta relativa al basePath.
+     */
+    public byte[] leerFichero(String rutaRelativa) throws IOException {
+        Path ruta = Paths.get(basePath, rutaRelativa);
+        return Files.readAllBytes(ruta);
     }
 
     /**

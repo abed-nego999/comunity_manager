@@ -1,0 +1,1324 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org"
+      xmlns:layout="http://www.ultraq.net.nz/thymeleaf/layout"
+      layout:decorate="~{fragments/layout}"
+      lang="es">
+<head>
+    <title>Eventos</title>
+    <style>
+        /* ── Layout de eventos ───────────────────────────────────────────────── */
+        .eventos-wrapper {
+            display: flex;
+            height: 100%;
+            overflow: hidden;
+        }
+
+        /* ── Panel izquierdo: lista de eventos ───────────────────────────────── */
+        .eventos-list-panel {
+            width: 300px;
+            min-width: 300px;
+            background: white;
+            border-right: 1px solid #e4e6eb;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .panel-header {
+            padding: 10px 16px;
+            border-bottom: 1px solid #e4e6eb;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-shrink: 0;
+            flex-wrap: wrap;
+            gap: 6px;
+        }
+
+        .panel-title {
+            font-size: 14px;
+            font-weight: 700;
+            color: #1c1e21;
+        }
+
+        .panel-header-actions {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .btn-nuevo {
+            background: #7c6af7;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            padding: 6px 12px;
+            font-size: 12px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background .15s;
+        }
+
+        .btn-nuevo:hover { background: #6a59e0; }
+
+        .toggle-cerrados {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            font-size: 11px;
+            color: #65676b;
+            cursor: pointer;
+            white-space: nowrap;
+        }
+
+        .toggle-cerrados input { cursor: pointer; }
+
+        .eventos-list {
+            flex: 1;
+            overflow-y: auto;
+            padding: 8px;
+        }
+
+        /* ── Tarjeta de evento ───────────────────────────────────────────────── */
+        .evento-card {
+            padding: 12px;
+            border-radius: 8px;
+            cursor: pointer;
+            margin-bottom: 6px;
+            border: 1px solid #e4e6eb;
+            transition: border-color .15s, box-shadow .15s, background .15s;
+        }
+
+        .evento-card:hover {
+            border-color: #7c6af7;
+            box-shadow: 0 2px 8px rgba(124,106,247,.15);
+        }
+
+        .evento-card.selected {
+            background: #f0eeff;
+            border-color: #7c6af7;
+        }
+
+        .evento-card-header {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 8px;
+            margin-bottom: 4px;
+        }
+
+        .evento-nombre {
+            font-size: 13px;
+            font-weight: 600;
+            color: #1c1e21;
+            line-height: 1.3;
+        }
+
+        .badge-estado {
+            font-size: 10px;
+            font-weight: 700;
+            padding: 2px 7px;
+            border-radius: 10px;
+            white-space: nowrap;
+            flex-shrink: 0;
+        }
+
+        .badge-estado.BORRADOR { background: #f0f2f5; color: #65676b; }
+        .badge-estado.ACTIVO   { background: #e6f4ea; color: #2d7a3a; }
+        .badge-estado.CERRADO  { background: #e8f0fe; color: #1a73e8; }
+
+        .evento-fecha {
+            font-size: 11px;
+            color: #65676b;
+            margin-top: 2px;
+        }
+
+        /* Placeholder lista vacía */
+        .list-placeholder {
+            text-align: center;
+            color: #65676b;
+            font-size: 13px;
+            padding: 32px 16px;
+            line-height: 1.6;
+        }
+
+        /* ── Panel derecho: detalle del evento ───────────────────────────────── */
+        .evento-detail-panel {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        /* Placeholder panel derecho */
+        .detail-placeholder {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-direction: column;
+            gap: 12px;
+            color: #65676b;
+        }
+
+        .detail-placeholder svg { opacity: .3; }
+        .detail-placeholder p { font-size: 14px; }
+
+        /* Cabecera del detalle */
+        .detail-header {
+            padding: 14px 20px;
+            background: white;
+            border-bottom: 1px solid #e4e6eb;
+            flex-shrink: 0;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+        }
+
+        .detail-titulo {
+            font-size: 16px;
+            font-weight: 700;
+            color: #1c1e21;
+        }
+
+        .detail-meta {
+            font-size: 12px;
+            color: #65676b;
+            margin-top: 2px;
+        }
+
+        .detail-header-btns {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+            flex-shrink: 0;
+        }
+
+        .btn-abrir-chat {
+            background: none;
+            border: 1px solid #7c6af7;
+            color: #7c6af7;
+            border-radius: 6px;
+            padding: 6px 14px;
+            font-size: 12px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background .15s, color .15s;
+            white-space: nowrap;
+            text-decoration: none;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .btn-abrir-chat:hover { background: #7c6af7; color: white; }
+
+        .btn-editar-evento {
+            background: none;
+            border: 1px solid #ccd0d5;
+            color: #65676b;
+            border-radius: 6px;
+            padding: 6px 14px;
+            font-size: 12px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background .15s, color .15s, border-color .15s;
+            white-space: nowrap;
+        }
+
+        .btn-editar-evento:hover { border-color: #7c6af7; color: #7c6af7; background: #f0eeff; }
+
+        /* ── Tabs ────────────────────────────────────────────────────────────── */
+        .tabs-bar {
+            display: flex;
+            background: white;
+            border-bottom: 1px solid #e4e6eb;
+            flex-shrink: 0;
+            padding: 0 20px;
+        }
+
+        .tab-btn {
+            background: none;
+            border: none;
+            border-bottom: 2px solid transparent;
+            padding: 10px 16px;
+            font-size: 13px;
+            font-weight: 600;
+            color: #65676b;
+            cursor: pointer;
+            transition: color .15s, border-color .15s;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .tab-btn:hover { color: #1c1e21; }
+
+        .tab-btn.active {
+            color: #7c6af7;
+            border-bottom-color: #7c6af7;
+        }
+
+        .tab-count {
+            background: #e4e6eb;
+            color: #65676b;
+            font-size: 10px;
+            font-weight: 700;
+            padding: 1px 6px;
+            border-radius: 8px;
+        }
+
+        .tab-btn.active .tab-count {
+            background: #d4ccff;
+            color: #7c6af7;
+        }
+
+        /* ── Lista de publicaciones ──────────────────────────────────────────── */
+        .publicaciones-area {
+            flex: 1;
+            overflow-y: auto;
+            padding: 16px 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        /* ── Tarjeta de publicación ──────────────────────────────────────────── */
+        .pub-card {
+            background: white;
+            border: 1px solid #e4e6eb;
+            border-radius: 10px;
+            padding: 14px 16px;
+            box-shadow: 0 1px 3px rgba(0,0,0,.06);
+        }
+
+        /* Barra de título */
+        .pub-card-header {
+            margin: -14px -16px 12px;
+            padding: 8px 14px;
+            border-radius: 9px 9px 0 0;
+            font-size: 12px;
+            font-weight: 600;
+            color: white;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            line-height: 1.4;
+        }
+
+        .pub-header-Facebook  { background: #1877F2; }
+        .pub-header-Instagram { background: #E1306C; }
+        .pub-header-YouTube   { background: #FF0000; }
+        .pub-header-Blog      { background: #2E7D32; }
+        .pub-header-other     { background: #65676b; }
+
+        .pub-texto {
+            font-size: 13px;
+            line-height: 1.55;
+            color: #1c1e21;
+            white-space: pre-wrap;
+            word-break: break-word;
+        }
+
+        /* ── Adjuntos de publicación ─────────────────────────────────────────── */
+        .pub-adjuntos {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            margin-top: 10px;
+            align-items: flex-start;
+        }
+
+        .adjunto-chip {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            background: #f0f2f5;
+            border: 1px solid #dde0e4;
+            border-radius: 14px;
+            padding: 3px 4px 3px 10px;
+            font-size: 11px;
+            color: #1c1e21;
+            text-decoration: none;
+            max-width: 220px;
+            transition: background .1s;
+        }
+
+        .adjunto-chip:hover { background: #e4e6eb; }
+
+        .adjunto-chip-nombre {
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            flex: 1;
+        }
+
+        .btn-del-adjunto {
+            background: none;
+            border: none;
+            color: #909399;
+            cursor: pointer;
+            padding: 1px 5px;
+            font-size: 14px;
+            line-height: 1;
+            flex-shrink: 0;
+            border-radius: 50%;
+            transition: color .1s, background .1s;
+        }
+
+        .btn-del-adjunto:hover { color: #e41e3f; background: rgba(228,30,63,.1); }
+
+        /* ── Miniatura de imagen en publicaciones ────────────────────────────── */
+        .adjunto-img-wrapper {
+            position: relative;
+            display: inline-flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 2px;
+        }
+
+        .pub-adjunto-img {
+            width: 80px;
+            height: 80px;
+            object-fit: cover;
+            border-radius: 6px;
+            cursor: pointer;
+            display: block;
+            border: 1px solid #dde0e4;
+            transition: opacity .15s;
+        }
+
+        .pub-adjunto-img:hover { opacity: .8; }
+
+        .adjunto-img-wrapper .btn-del-adjunto {
+            font-size: 11px;
+            padding: 0 4px;
+        }
+
+        /* ── Acciones ────────────────────────────────────────────────────────── */
+        .pub-card-actions {
+            display: flex;
+            gap: 8px;
+            margin-top: 12px;
+            flex-wrap: wrap;
+        }
+
+        .btn-accion {
+            height: 30px;
+            border-radius: 6px;
+            border: 1px solid;
+            padding: 0 12px;
+            font-size: 12px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background .15s, color .15s;
+            font-family: inherit;
+        }
+
+        .btn-aprobar    { background: #e6f4ea; color: #2d7a3a; border-color: #a8d5b0; }
+        .btn-rechazar   { background: #ffebee; color: #c62828; border-color: #ffb3b3; }
+        .btn-cambios    { background: #fff8e1; color: #f57f17; border-color: #ffe082; }
+        .btn-publicar   { background: #e8f0fe; color: #1a73e8; border-color: #aecbfa; }
+        .btn-anadir-img { background: #f0f2f5; color: #65676b; border-color: #dde0e4; }
+
+        .btn-aprobar:hover    { background: #2d7a3a; color: white; }
+        .btn-rechazar:hover   { background: #c62828; color: white; }
+        .btn-cambios:hover    { background: #f57f17; color: white; }
+        .btn-publicar:hover   { background: #1a73e8; color: white; }
+        .btn-anadir-img:hover { background: #e4e6eb; color: #1c1e21; }
+
+        .area-vacia {
+            text-align: center;
+            color: #65676b;
+            font-size: 13px;
+            padding: 40px 20px;
+        }
+
+        /* ── Modales ─────────────────────────────────────────────────────────── */
+        .modal-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,.5);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 100;
+        }
+
+        .modal {
+            background: white;
+            border-radius: 12px;
+            padding: 24px;
+            width: 400px;
+            max-width: 95vw;
+            box-shadow: 0 8px 32px rgba(0,0,0,.2);
+        }
+
+        .modal h2 { font-size: 18px; margin-bottom: 16px; }
+
+        .modal label {
+            display: block;
+            font-size: 13px;
+            font-weight: 600;
+            margin-bottom: 4px;
+            color: #65676b;
+        }
+
+        .modal input, .modal select, .modal textarea {
+            width: 100%;
+            border: 1px solid #ccd0d5;
+            border-radius: 6px;
+            padding: 8px 12px;
+            font-size: 14px;
+            font-family: inherit;
+            margin-bottom: 12px;
+            outline: none;
+            box-sizing: border-box;
+        }
+
+        .modal input:focus, .modal select:focus, .modal textarea:focus { border-color: #7c6af7; }
+
+        .modal-actions {
+            display: flex;
+            justify-content: flex-end;
+            gap: 8px;
+            margin-top: 4px;
+        }
+
+        .btn-cancelar-modal {
+            background: #e4e6eb;
+            color: #1c1e21;
+            border: none;
+            border-radius: 6px;
+            padding: 8px 16px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 600;
+        }
+
+        .btn-crear-evento {
+            background: #7c6af7;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            padding: 8px 16px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 600;
+        }
+
+        .btn-crear-evento:hover { background: #6a59e0; }
+
+        /* Toast */
+        #toast {
+            position: fixed;
+            bottom: 24px;
+            left: 50%;
+            transform: translateX(-50%) translateY(60px);
+            background: #1c1e21;
+            color: white;
+            padding: 10px 20px;
+            border-radius: 8px;
+            font-size: 14px;
+            opacity: 0;
+            transition: all .3s;
+            z-index: 200;
+            white-space: nowrap;
+        }
+
+        #toast.visible { opacity: 1; transform: translateX(-50%) translateY(0); }
+    </style>
+</head>
+<body>
+
+<!-- ── Contenido principal ────────────────────────────────────────────────── -->
+<div layout:fragment="content" class="eventos-wrapper">
+
+    <!-- Panel izquierdo -->
+    <aside class="eventos-list-panel">
+        <div class="panel-header">
+            <span class="panel-title">Eventos</span>
+            <div class="panel-header-actions">
+                <label class="toggle-cerrados" id="toggleCerradosLabel" style="display:none">
+                    <input type="checkbox" id="mostrarCerradosChk"> Cerrados
+                </label>
+                <button class="btn-nuevo" id="btnNuevoEvento" style="display:none" type="button">
+                    + Nuevo
+                </button>
+            </div>
+        </div>
+        <div class="eventos-list" id="eventosList">
+            <div class="list-placeholder" id="listPlaceholder">
+                Selecciona un cliente en la barra lateral para ver sus eventos
+            </div>
+        </div>
+    </aside>
+
+    <!-- Panel derecho -->
+    <section class="evento-detail-panel" id="detailPanel">
+
+        <!-- Placeholder -->
+        <div class="detail-placeholder" id="detailPlaceholder">
+            <svg width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                 stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/>
+                <line x1="16" y1="2" x2="16" y2="6"/>
+                <line x1="8" y1="2" x2="8" y2="6"/>
+                <line x1="3" y1="10" x2="21" y2="10"/>
+            </svg>
+            <p>Selecciona un evento para ver sus publicaciones</p>
+        </div>
+
+        <!-- Detalle activo -->
+        <div id="eventoDetail" style="display:none; flex:1; flex-direction:column; overflow:hidden;">
+
+            <!-- Cabecera -->
+            <div class="detail-header">
+                <div>
+                    <div class="detail-titulo" id="detailNombre"></div>
+                    <div class="detail-meta" id="detailMeta"></div>
+                </div>
+                <div class="detail-header-btns">
+                    <button class="btn-editar-evento" id="btnEditarEvento" type="button">
+                        ✎ Editar
+                    </button>
+                    <a id="btnAbrirChat" href="/chat" class="btn-abrir-chat">
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                             stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+                        </svg>
+                        Abrir chat
+                    </a>
+                </div>
+            </div>
+
+            <!-- Tabs -->
+            <div class="tabs-bar">
+                <button class="tab-btn active" data-tab="PENDIENTE" type="button">
+                    Pendientes <span class="tab-count" id="countPendiente">0</span>
+                </button>
+                <button class="tab-btn" data-tab="APROBADA" type="button">
+                    Aprobadas <span class="tab-count" id="countAprobada">0</span>
+                </button>
+                <button class="tab-btn" data-tab="RECHAZADA" type="button">
+                    Rechazadas <span class="tab-count" id="countRechazada">0</span>
+                </button>
+            </div>
+
+            <!-- Publicaciones -->
+            <div class="publicaciones-area" id="publicacionesArea"></div>
+
+        </div>
+    </section>
+
+    <!-- ── Modal nuevo evento ──────────────────────────────────────────────── -->
+    <div class="modal-overlay" id="modalNuevoEvento" style="display:none">
+        <div class="modal">
+            <h2>Nuevo evento</h2>
+            <label for="eventoNombre">Nombre *</label>
+            <input type="text" id="eventoNombre" placeholder="Ej: Milonga de verano">
+            <label for="eventoFecha">Fecha del evento</label>
+            <input type="date" id="eventoFecha">
+            <label for="eventoEstado">Estado</label>
+            <select id="eventoEstado">
+                <option value="ACTIVO">Activo</option>
+                <option value="BORRADOR">Borrador</option>
+            </select>
+            <label for="eventoDescripcion">Descripción</label>
+            <textarea id="eventoDescripcion" rows="3" placeholder="Descripción opcional..."></textarea>
+            <div class="modal-actions">
+                <button class="btn-cancelar-modal" id="cancelarEvento">Cancelar</button>
+                <button class="btn-crear-evento" id="crearEvento">Crear evento</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ── Modal editar evento ────────────────────────────────────────────── -->
+    <div class="modal-overlay" id="modalEditarEvento" style="display:none">
+        <div class="modal">
+            <h2>Editar evento</h2>
+            <label for="editNombre">Nombre *</label>
+            <input type="text" id="editNombre" placeholder="Nombre del evento">
+            <label for="editFecha">Fecha del evento</label>
+            <input type="date" id="editFecha">
+            <label for="editEstado">Estado</label>
+            <select id="editEstado">
+                <option value="ACTIVO">Activo</option>
+                <option value="BORRADOR">Borrador</option>
+                <option value="CERRADO">Cerrado (archivar)</option>
+            </select>
+            <label for="editDescripcion">Descripción</label>
+            <textarea id="editDescripcion" rows="3" placeholder="Descripción..."></textarea>
+            <div class="modal-actions">
+                <button class="btn-cancelar-modal" id="cancelarEditar">Cancelar</button>
+                <button class="btn-crear-evento" id="guardarEditar">Guardar cambios</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ── Modal pedir cambios ─────────────────────────────────────────────── -->
+    <div class="modal-overlay" id="modalFeedback" style="display:none">
+        <div class="modal">
+            <h2>Pedir cambios</h2>
+            <label for="feedbackTexto">¿Qué cambios necesitas?</label>
+            <textarea id="feedbackTexto" rows="4" placeholder="Describe los cambios que quieres en esta publicación…"></textarea>
+            <div class="modal-actions">
+                <button class="btn-cancelar-modal" id="cancelarFeedbackModal">Cancelar</button>
+                <button class="btn-crear-evento" id="confirmarFeedbackModal">Enviar a Claude</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- File input oculto para subir adjuntos a publicaciones -->
+    <input type="file" id="fileInputAdjunto" style="display:none"
+           accept=".jpg,.jpeg,.png,.gif,.webp,.mp4,image/jpeg,image/png,image/gif,image/webp,video/mp4">
+
+    <div id="toast"></div>
+
+</div>
+
+<!-- ── Scripts de eventos ─────────────────────────────────────────────────── -->
+<th:block layout:fragment="scripts">
+<script>
+    // ── Estado ─────────────────────────────────────────────────────────────────
+    let clienteIdActivo    = sessionStorage.getItem('clienteActivoId') || localStorage.getItem('clienteActivoId') || null;
+    let eventoActivo       = null;
+    let tabActiva          = 'PENDIENTE';
+    let publicacionesCache = {};
+    let feedbackPubId      = null;
+    let adjuntoUploadPubId = null;
+    let todosEventos       = [];       // todos los eventos del cliente cargados
+    let mostrarCerrados    = false;    // toggle "Mostrar cerrados"
+
+    // Parámetro URL: viene de enlace desde el badge del chat
+    const _eventoIdParam = new URLSearchParams(window.location.search).get('eventoId');
+
+    const eventosList         = document.getElementById('eventosList');
+    const listPlaceholder     = document.getElementById('listPlaceholder');
+    const btnNuevo            = document.getElementById('btnNuevoEvento');
+    const toggleCerradosLabel = document.getElementById('toggleCerradosLabel');
+    const mostrarCerradosChk  = document.getElementById('mostrarCerradosChk');
+    const detailPlaceholder   = document.getElementById('detailPlaceholder');
+    const eventoDetailEl      = document.getElementById('eventoDetail');
+    const publicacionesArea   = document.getElementById('publicacionesArea');
+    const fileInputAdjunto    = document.getElementById('fileInputAdjunto');
+
+    // ── Cambio de cliente global ───────────────────────────────────────────────
+    function onClienteChanged(clienteId) {
+        clienteIdActivo = clienteId || null;
+        eventoActivo = null;
+        todosEventos = [];
+        publicacionesCache = {};
+        eventosList.innerHTML = '';
+        ocultarDetalle();
+
+        if (!clienteIdActivo) {
+            listPlaceholder.style.display = 'block';
+            listPlaceholder.textContent = 'Selecciona un cliente en la barra lateral para ver sus eventos';
+            btnNuevo.style.display = 'none';
+            toggleCerradosLabel.style.display = 'none';
+            return;
+        }
+
+        listPlaceholder.style.display = 'block';
+        listPlaceholder.textContent = 'Cargando eventos…';
+        btnNuevo.style.display = 'block';
+        toggleCerradosLabel.style.display = 'flex';
+        cargarEventos(clienteId);
+    }
+
+    document.addEventListener('clienteGlobalChanged', (e) => {
+        onClienteChanged(e.detail.clienteId);
+    });
+
+    if (clienteIdActivo) {
+        onClienteChanged(clienteIdActivo);
+    }
+
+    // ── Toggle "Mostrar cerrados" ──────────────────────────────────────────────
+    mostrarCerradosChk.addEventListener('change', () => {
+        mostrarCerrados = mostrarCerradosChk.checked;
+        aplicarFiltroEventos();
+    });
+
+    // ── Carga de eventos ───────────────────────────────────────────────────────
+    async function cargarEventos(clienteId) {
+        try {
+            todosEventos = await fetchJson(`/api/v1/eventos?clienteId=${clienteId}`);
+            aplicarFiltroEventos();
+
+            // Auto-selección por parámetro ?eventoId= (viene del badge del chat)
+            // o por sessionStorage (navegación entre vistas)
+            const autoSelectId = _eventoIdParam || sessionStorage.getItem('eventoActivoId');
+            if (autoSelectId) {
+                const eventoTarget = todosEventos.find(e => e.id === autoSelectId);
+                if (eventoTarget) {
+                    // Asegurarse de que la card exista (puede estar oculta si es CERRADO)
+                    let card = eventosList.querySelector(`[data-id="${autoSelectId}"]`);
+                    if (!card && eventoTarget.estado === 'CERRADO') {
+                        mostrarCerrados = true;
+                        mostrarCerradosChk.checked = true;
+                        aplicarFiltroEventos();
+                        card = eventosList.querySelector(`[data-id="${autoSelectId}"]`);
+                    }
+                    if (card) await seleccionarEvento(eventoTarget, card);
+                }
+            }
+        } catch (err) {
+            listPlaceholder.textContent = 'Error al cargar eventos.';
+            mostrarToast('Error: ' + err.message);
+        }
+    }
+
+    function aplicarFiltroEventos() {
+        const visibles = mostrarCerrados
+            ? todosEventos
+            : todosEventos.filter(e => e.estado !== 'CERRADO');
+
+        eventosList.innerHTML = '';
+        if (visibles.length === 0) {
+            listPlaceholder.style.display = 'block';
+            listPlaceholder.textContent = todosEventos.length === 0
+                ? 'No hay eventos. Crea el primero con + Nuevo.'
+                : 'No hay eventos activos. Activa "Cerrados" para verlos.';
+            return;
+        }
+        listPlaceholder.style.display = 'none';
+        visibles.forEach(e => eventosList.appendChild(crearTarjetaEvento(e)));
+
+        // Restaurar selección si el evento activo sigue en la lista
+        if (eventoActivo) {
+            const card = eventosList.querySelector(`[data-id="${eventoActivo.id}"]`);
+            if (card) card.classList.add('selected');
+        }
+    }
+
+    function crearTarjetaEvento(evento) {
+        const card = document.createElement('div');
+        card.className = 'evento-card';
+        card.dataset.id = evento.id;
+
+        const fechaTxt = evento.fechaEvento
+            ? new Date(evento.fechaEvento + 'T00:00:00').toLocaleDateString('es-ES', { day: '2-digit', month: 'short', year: 'numeric' })
+            : 'Sin fecha';
+
+        const header = document.createElement('div');
+        header.className = 'evento-card-header';
+
+        const nombre = document.createElement('span');
+        nombre.className = 'evento-nombre';
+        nombre.textContent = evento.nombre;
+
+        const badge = document.createElement('span');
+        badge.className = 'badge-estado ' + evento.estado;
+        badge.textContent = formatEstado(evento.estado);
+
+        header.appendChild(nombre);
+        header.appendChild(badge);
+
+        const fecha = document.createElement('div');
+        fecha.className = 'evento-fecha';
+        fecha.textContent = fechaTxt;
+
+        card.appendChild(header);
+        card.appendChild(fecha);
+        card.addEventListener('click', () => seleccionarEvento(evento, card));
+        return card;
+    }
+
+    function formatEstado(estado) {
+        const map = { BORRADOR: 'Borrador', ACTIVO: 'Activo', CERRADO: 'Cerrado' };
+        return map[estado] || estado;
+    }
+
+    // ── Selección de evento ────────────────────────────────────────────────────
+    async function seleccionarEvento(evento, cardEl) {
+        document.querySelectorAll('.evento-card.selected').forEach(c => c.classList.remove('selected'));
+        cardEl.classList.add('selected');
+
+        eventoActivo = evento;
+        publicacionesCache = {};
+        // Persistir en sessionStorage para restaurar al navegar entre vistas
+        sessionStorage.setItem('eventoActivoId', evento.id);
+
+        document.getElementById('detailNombre').textContent = evento.nombre;
+        const fechaTxt = evento.fechaEvento
+            ? new Date(evento.fechaEvento + 'T00:00:00').toLocaleDateString('es-ES', { day: '2-digit', month: 'long', year: 'numeric' })
+            : null;
+        document.getElementById('detailMeta').textContent =
+            [fechaTxt, formatEstado(evento.estado)].filter(Boolean).join(' · ');
+
+        document.getElementById('btnAbrirChat').href = `/chat?eventoId=${evento.id}`;
+
+        detailPlaceholder.style.display = 'none';
+        eventoDetailEl.style.display = 'flex';
+
+        tabActiva = 'PENDIENTE';
+        document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+        document.querySelector('.tab-btn[data-tab="PENDIENTE"]').classList.add('active');
+
+        await cargarPublicacionesEvento(evento.id);
+    }
+
+    // ── Carga de publicaciones ─────────────────────────────────────────────────
+    async function cargarPublicacionesEvento(eventoId) {
+        publicacionesArea.innerHTML = '<div class="area-vacia">Cargando…</div>';
+        try {
+            const todas = await fetchJson(`/api/v1/publicaciones?eventoId=${eventoId}`);
+
+            publicacionesCache = {
+                PENDIENTE: todas.filter(p => p.estado === 'PENDIENTE'),
+                APROBADA:  todas.filter(p => p.estado === 'APROBADA' || p.estado === 'ENVIADA'),
+                RECHAZADA: todas.filter(p => p.estado === 'RECHAZADA')
+            };
+
+            document.getElementById('countPendiente').textContent = publicacionesCache.PENDIENTE.length;
+            document.getElementById('countAprobada').textContent  = publicacionesCache.APROBADA.length;
+            document.getElementById('countRechazada').textContent = publicacionesCache.RECHAZADA.length;
+
+            renderizarTab(tabActiva);
+        } catch (err) {
+            publicacionesArea.innerHTML = '<div class="area-vacia">Error al cargar publicaciones.</div>';
+            mostrarToast('Error: ' + err.message);
+        }
+    }
+
+    function renderizarTab(tab) {
+        tabActiva = tab;
+        const lista = publicacionesCache[tab] || [];
+        publicacionesArea.innerHTML = '';
+
+        if (lista.length === 0) {
+            const msg = {
+                PENDIENTE: 'No hay publicaciones pendientes',
+                APROBADA:  'No hay publicaciones aprobadas ni enviadas',
+                RECHAZADA: 'No hay publicaciones rechazadas'
+            };
+            const div = document.createElement('div');
+            div.className = 'area-vacia';
+            div.textContent = msg[tab] || 'Sin publicaciones';
+            publicacionesArea.appendChild(div);
+            return;
+        }
+
+        lista.forEach(pub => publicacionesArea.appendChild(crearTarjetaPublicacion(pub, tab)));
+    }
+
+    // ── Tarjeta de publicación (DOM puro, sin innerHTML para contenido dinámico) ──
+    function formatFechaCompleta(iso) {
+        if (!iso) return null;
+        const d = new Date(iso);
+        const p = n => String(n).padStart(2, '0');
+        return `${p(d.getDate())}/${p(d.getMonth()+1)}/${d.getFullYear()} ${p(d.getHours())}:${p(d.getMinutes())}`;
+    }
+
+    function crearTarjetaPublicacion(pub, tab) {
+        const card = document.createElement('div');
+        card.className = 'pub-card';
+        card.dataset.id = pub.id;
+
+        // ── Cabecera coloreada ────────────────────────────────────────────────
+        const plataformaNombre = pub.tipoPublicacion?.plataforma?.nombre || 'Desconocida';
+        const tipoNombre       = pub.tipoPublicacion?.nombre || '';
+        const headerClass = {
+            'Facebook': 'Facebook', 'Instagram': 'Instagram',
+            'YouTube': 'YouTube', 'Blog Web': 'Blog'
+        }[plataformaNombre] || 'other';
+
+        const partesFecha = [];
+        if (pub.fechaGeneracion)  partesFecha.push('Generado: '  + formatFechaCompleta(pub.fechaGeneracion));
+        if (pub.fechaEnvio)       partesFecha.push('Enviado: '   + formatFechaCompleta(pub.fechaEnvio));
+        if (pub.fechaPublicacion) partesFecha.push('Publicado: ' + formatFechaCompleta(pub.fechaPublicacion));
+        const headerTxt = plataformaNombre + ' · ' + tipoNombre
+            + (partesFecha.length ? ' · ' + partesFecha.join(' | ') : '');
+
+        const header = document.createElement('div');
+        header.className = 'pub-card-header pub-header-' + headerClass;
+        header.title = headerTxt;
+        header.textContent = headerTxt;
+        card.appendChild(header);
+
+        // ── Texto generado ────────────────────────────────────────────────────
+        const texto = document.createElement('div');
+        texto.className = 'pub-texto';
+        texto.textContent = pub.textoGenerado || '';
+        card.appendChild(texto);
+
+        // ── Adjuntos (solo PENDIENTE y APROBADA no-enviada) ───────────────────
+        const conAdjuntos = (tab === 'PENDIENTE' || tab === 'APROBADA') && pub.estado !== 'ENVIADA';
+        if (conAdjuntos) {
+            const adjuntosDiv = document.createElement('div');
+            adjuntosDiv.className = 'pub-adjuntos';
+            adjuntosDiv.id = 'adjuntos-' + pub.id;
+            card.appendChild(adjuntosDiv);
+            cargarAdjuntosPublicacion(pub.id);
+        }
+
+        // ── Botones de acción (DOM puro + addEventListener) ───────────────────
+        const actionsDiv = document.createElement('div');
+        actionsDiv.className = 'pub-card-actions';
+        adjuntarBotonesAccion(actionsDiv, pub);
+        card.appendChild(actionsDiv);
+
+        return card;
+    }
+
+    function adjuntarBotonesAccion(container, pub) {
+        function btn(texto, cls, handler) {
+            const b = document.createElement('button');
+            b.type = 'button';
+            b.className = 'btn-accion ' + cls;
+            b.textContent = texto;
+            b.addEventListener('click', handler);
+            return b;
+        }
+
+        if (pub.estado === 'PENDIENTE') {
+            container.appendChild(btn('✓ Aprobar',       'btn-aprobar',    () => aprobar(pub.id)));
+            container.appendChild(btn('✗ Rechazar',      'btn-rechazar',   () => rechazar(pub.id)));
+            container.appendChild(btn('✎ Pedir cambios', 'btn-cambios',    () => abrirModalFeedback(pub.id)));
+            container.appendChild(btn('+ Imagen',        'btn-anadir-img', () => iniciarSubidaAdjunto(pub.id)));
+        } else if (pub.estado === 'APROBADA') {
+            container.appendChild(btn('↑ Publicar',  'btn-publicar', () => publicar(pub.id)));
+            container.appendChild(btn('✗ Rechazar', 'btn-rechazar',  () => rechazar(pub.id)));
+        }
+        // ENVIADA y RECHAZADA: sin botones
+    }
+
+    // ── Adjuntos de publicación ────────────────────────────────────────────────
+    async function cargarAdjuntosPublicacion(pubId) {
+        try {
+            const adjuntos = await fetchJson(`/api/v1/publicaciones/${pubId}/adjuntos`);
+            renderAdjuntosEnCard(pubId, adjuntos);
+        } catch (_) { /* no interrumpir el flujo */ }
+    }
+
+    function renderAdjuntosEnCard(pubId, adjuntos) {
+        const container = document.getElementById('adjuntos-' + pubId);
+        if (!container) return;
+        container.innerHTML = '';
+        adjuntos.forEach(adj => {
+            const url = '/api/v1/ficheros?ruta=' + encodeURIComponent(adj.rutaFichero);
+
+            // Botón de borrar (reutilizado en ambas ramas)
+            const delBtn = document.createElement('button');
+            delBtn.type = 'button';
+            delBtn.className = 'btn-del-adjunto';
+            delBtn.title = 'Eliminar adjunto';
+            delBtn.textContent = '×';
+            delBtn.addEventListener('click', async (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                try {
+                    // contexto=publicacion: solo desasocia de la publicación;
+                    // el registro y el fichero se borran solo si no quedan más referencias.
+                    await fetchDelete('/api/v1/adjuntos/' + adj.id + '?contexto=publicacion');
+                    await cargarAdjuntosPublicacion(pubId);
+                } catch (err) { mostrarToast('Error al eliminar adjunto: ' + err.message); }
+            });
+
+            if (adj.tipoMime && adj.tipoMime.startsWith('image/')) {
+                // Miniatura clicable
+                const wrapper = document.createElement('div');
+                wrapper.className = 'adjunto-img-wrapper';
+
+                const a = document.createElement('a');
+                a.href = url;
+                a.target = '_blank';
+                a.rel = 'noopener';
+                a.title = adj.nombreFichero;
+
+                const img = document.createElement('img');
+                img.src = url;
+                img.alt = adj.nombreFichero;
+                img.className = 'pub-adjunto-img';
+
+                a.appendChild(img);
+                wrapper.appendChild(a);
+                wrapper.appendChild(delBtn);
+                container.appendChild(wrapper);
+            } else {
+                // Pill de texto para vídeos, PDFs y otros
+                const chip = document.createElement('a');
+                chip.href = url;
+                chip.target = '_blank';
+                chip.rel = 'noopener';
+                chip.className = 'adjunto-chip';
+
+                const icono = adj.tipoMime === 'video/mp4' ? '🎬'
+                    : adj.tipoMime === 'application/pdf' ? '📄' : '🖼';
+
+                const nombre = document.createElement('span');
+                nombre.className = 'adjunto-chip-nombre';
+                nombre.title = adj.nombreFichero;
+                nombre.textContent = icono + ' ' + adj.nombreFichero;
+
+                chip.appendChild(nombre);
+                chip.appendChild(delBtn);
+                container.appendChild(chip);
+            }
+        });
+    }
+
+    // ── Subida de adjunto a publicación ───────────────────────────────────────
+    function iniciarSubidaAdjunto(pubId) {
+        adjuntoUploadPubId = pubId;
+        fileInputAdjunto.value = '';
+        fileInputAdjunto.click();
+    }
+
+    fileInputAdjunto.addEventListener('change', async () => {
+        const file = fileInputAdjunto.files[0];
+        if (!file || !adjuntoUploadPubId || !eventoActivo) return;
+
+        const formData = new FormData();
+        formData.append('fichero', file);
+        formData.append('eventoId', eventoActivo.id);
+
+        const pubId = adjuntoUploadPubId;
+        adjuntoUploadPubId = null;
+
+        try {
+            await fetchMultipart('/api/v1/publicaciones/' + pubId + '/adjuntos', formData);
+            mostrarToast('"' + file.name + '" añadido correctamente');
+            await cargarAdjuntosPublicacion(pubId);
+        } catch (err) { mostrarToast('Error al subir imagen: ' + err.message); }
+    });
+
+    // ── Acciones sobre publicaciones ───────────────────────────────────────────
+    async function aprobar(id) {
+        try {
+            await fetchJson('/api/v1/publicaciones/' + id + '/aprobar', { method: 'PATCH' });
+            mostrarToast('Publicación aprobada');
+            await cargarPublicacionesEvento(eventoActivo.id);
+        } catch (err) { mostrarToast('Error: ' + err.message); }
+    }
+
+    async function rechazar(id) {
+        try {
+            await fetchJson('/api/v1/publicaciones/' + id + '/rechazar', { method: 'PATCH' });
+            mostrarToast('Publicación rechazada');
+            await cargarPublicacionesEvento(eventoActivo.id);
+        } catch (err) { mostrarToast('Error: ' + err.message); }
+    }
+
+    async function publicar(id) {
+        try {
+            await fetchJson('/api/v1/publicaciones/' + id + '/publicar', { method: 'POST' });
+            mostrarToast('Publicación enviada');
+            await cargarPublicacionesEvento(eventoActivo.id);
+        } catch (err) { mostrarToast('Error: ' + err.message); }
+    }
+
+    // ── Modal pedir cambios ────────────────────────────────────────────────────
+    function abrirModalFeedback(pubId) {
+        feedbackPubId = pubId;
+        document.getElementById('feedbackTexto').value = '';
+        document.getElementById('modalFeedback').style.display = 'flex';
+        document.getElementById('feedbackTexto').focus();
+    }
+
+    document.getElementById('cancelarFeedbackModal').addEventListener('click', () => {
+        document.getElementById('modalFeedback').style.display = 'none';
+        feedbackPubId = null;
+    });
+
+    document.getElementById('modalFeedback').addEventListener('click', e => {
+        if (e.target === document.getElementById('modalFeedback')) {
+            document.getElementById('modalFeedback').style.display = 'none';
+            feedbackPubId = null;
+        }
+    });
+
+    document.getElementById('confirmarFeedbackModal').addEventListener('click', async () => {
+        const feedback = document.getElementById('feedbackTexto').value.trim();
+        if (!feedback) { mostrarToast('Escribe el feedback antes de continuar'); return; }
+        if (!feedbackPubId) return;
+
+        try {
+            const pub = await fetchJson('/api/v1/publicaciones/' + feedbackPubId + '/solicitar-cambios', {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ feedback })
+            });
+
+            document.getElementById('modalFeedback').style.display = 'none';
+
+            const plataforma = pub.tipoPublicacion?.plataforma?.nombre || 'Plataforma';
+            const tipo       = pub.tipoPublicacion?.nombre || 'Publicación';
+            const mensaje    = 'Modifica la publicación de ' + plataforma + ' - ' + tipo
+                + ' (ID: ' + pub.id + '): ' + feedback;
+
+            window.location.href = '/chat?eventoId=' + encodeURIComponent(pub.eventoId)
+                + '&feedback=' + encodeURIComponent(mensaje);
+        } catch (err) { mostrarToast('Error: ' + err.message); }
+    });
+
+    // ── Tabs ───────────────────────────────────────────────────────────────────
+    document.querySelectorAll('.tab-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            renderizarTab(btn.dataset.tab);
+        });
+    });
+
+    // ── Modal nuevo evento ─────────────────────────────────────────────────────
+    btnNuevo.addEventListener('click', () => {
+        document.getElementById('eventoNombre').value = '';
+        document.getElementById('eventoFecha').value = '';
+        document.getElementById('eventoEstado').value = 'ACTIVO';
+        document.getElementById('eventoDescripcion').value = '';
+        document.getElementById('modalNuevoEvento').style.display = 'flex';
+        document.getElementById('eventoNombre').focus();
+    });
+
+    document.getElementById('cancelarEvento').addEventListener('click', () => {
+        document.getElementById('modalNuevoEvento').style.display = 'none';
+    });
+
+    document.getElementById('modalNuevoEvento').addEventListener('click', e => {
+        if (e.target === document.getElementById('modalNuevoEvento')) {
+            document.getElementById('modalNuevoEvento').style.display = 'none';
+        }
+    });
+
+    document.getElementById('crearEvento').addEventListener('click', async () => {
+        const nombre = document.getElementById('eventoNombre').value.trim();
+        if (!nombre) { mostrarToast('El nombre del evento es obligatorio'); return; }
+
+        const body = {
+            clienteId: clienteIdActivo,
+            nombre,
+            estado: document.getElementById('eventoEstado').value
+        };
+        const fecha = document.getElementById('eventoFecha').value;
+        const desc  = document.getElementById('eventoDescripcion').value.trim();
+        if (fecha) body.fechaEvento = fecha;
+        if (desc)  body.descripcion = desc;
+
+        try {
+            const evento = await fetchJson('/api/v1/eventos', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(body)
+            });
+
+            document.getElementById('modalNuevoEvento').style.display = 'none';
+            mostrarToast('Evento "' + evento.nombre + '" creado');
+
+            todosEventos.unshift(evento); // añadir al principio
+            aplicarFiltroEventos();
+
+            const card = eventosList.querySelector('[data-id="' + evento.id + '"]');
+            if (card) await seleccionarEvento(evento, card);
+        } catch (err) { mostrarToast('Error al crear el evento: ' + err.message); }
+    });
+
+    // ── Modal editar evento ────────────────────────────────────────────────────
+    document.getElementById('btnEditarEvento').addEventListener('click', () => {
+        if (!eventoActivo) return;
+        document.getElementById('editNombre').value      = eventoActivo.nombre || '';
+        document.getElementById('editFecha').value       = eventoActivo.fechaEvento || '';
+        document.getElementById('editEstado').value      = eventoActivo.estado || 'ACTIVO';
+        document.getElementById('editDescripcion').value = eventoActivo.descripcion || '';
+        document.getElementById('modalEditarEvento').style.display = 'flex';
+        document.getElementById('editNombre').focus();
+    });
+
+    document.getElementById('cancelarEditar').addEventListener('click', () => {
+        document.getElementById('modalEditarEvento').style.display = 'none';
+    });
+
+    document.getElementById('modalEditarEvento').addEventListener('click', e => {
+        if (e.target === document.getElementById('modalEditarEvento')) {
+            document.getElementById('modalEditarEvento').style.display = 'none';
+        }
+    });
+
+    document.getElementById('guardarEditar').addEventListener('click', async () => {
+        const nombre = document.getElementById('editNombre').value.trim();
+        if (!nombre) { mostrarToast('El nombre del evento es obligatorio'); return; }
+        if (!eventoActivo) return;
+
+        const body = {
+            clienteId: clienteIdActivo,
+            nombre,
+            estado: document.getElementById('editEstado').value
+        };
+        const fecha = document.getElementById('editFecha').value;
+        const desc  = document.getElementById('editDescripcion').value.trim();
+        if (fecha) body.fechaEvento = fecha;
+        if (desc)  body.descripcion = desc;
+
+        try {
+            const actualizado = await fetchJson('/api/v1/eventos/' + eventoActivo.id, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(body)
+            });
+
+            document.getElementById('modalEditarEvento').style.display = 'none';
+
+            // Actualizar en array local y re-renderizar lista
+            const idx = todosEventos.findIndex(e => e.id === actualizado.id);
+            if (idx >= 0) todosEventos[idx] = actualizado;
+            eventoActivo = actualizado;
+            aplicarFiltroEventos();
+
+            // Actualizar cabecera del detalle
+            document.getElementById('detailNombre').textContent = actualizado.nombre;
+            const fechaTxt = actualizado.fechaEvento
+                ? new Date(actualizado.fechaEvento + 'T00:00:00').toLocaleDateString('es-ES', { day: '2-digit', month: 'long', year: 'numeric' })
+                : null;
+            document.getElementById('detailMeta').textContent =
+                [fechaTxt, formatEstado(actualizado.estado)].filter(Boolean).join(' · ');
+
+            mostrarToast('Evento actualizado correctamente');
+        } catch (err) { mostrarToast('Error al actualizar el evento: ' + err.message); }
+    });
+
+    // ── Helpers ────────────────────────────────────────────────────────────────
+    function ocultarDetalle() {
+        detailPlaceholder.style.display = 'flex';
+        eventoDetailEl.style.display = 'none';
+    }
+
+    async function fetchJson(url, options = {}) {
+        const res = await fetch(url, options);
+        if (!res.ok) {
+            const err = await res.json().catch(() => ({ mensaje: res.statusText }));
+            throw new Error(err.mensaje || res.statusText);
+        }
+        return res.json();
+    }
+
+    async function fetchMultipart(url, formData) {
+        const res = await fetch(url, { method: 'POST', body: formData });
+        if (!res.ok) {
+            const err = await res.json().catch(() => ({ mensaje: res.statusText }));
+            throw new Error(err.mensaje || res.statusText);
+        }
+        return res.json();
+    }
+
+    async function fetchDelete(url) {
+        const res = await fetch(url, { method: 'DELETE' });
+        if (!res.ok && res.status !== 204) {
+            const err = await res.json().catch(() => ({ mensaje: res.statusText }));
+            throw new Error(err.mensaje || res.statusText);
+        }
+    }
+
+    function mostrarToast(msg) {
+        const toast = document.getElementById('toast');
+        toast.textContent = msg;
+        toast.classList.add('visible');
+        setTimeout(() => toast.classList.remove('visible'), 3500);
+    }
+</script>
+</th:block>
+
+</body>
+</html>

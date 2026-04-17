@@ -30,7 +30,24 @@
       "Bash(curl -s http://localhost:8080/api/v1/tipos-adjunto)",
       "Bash(netstat -ano)",
       "Bash(taskkill:*)",
-      "Bash(cmd:*)"
+      "Bash(cmd:*)",
+      "Read(//mnt/c/Users/Esteban/git_repositories/**)",
+      "Bash(mvn compile:*)",
+      "Bash(curl -s http://localhost:8080/api/v1/eventos/a8e4f8da-7c16-4388-acd6-86de1c374f8b/conversacion)",
+      "Bash(python3 -c ':*)",
+      "Bash(curl -s http://localhost:8080/api/v1/publicaciones/__TRACKED_VAR__)",
+      "Bash(pkill -f \"comunity_manager\")",
+      "Skill(claude-api)",
+      "Bash(curl -s http://localhost:8080/api/v1/clientes)",
+      "Bash(python -c \"import json,sys; data=json.load\\(sys.stdin\\); [print\\(c['nombre'], '|', c['email']\\) for c in data]\")",
+      "Bash(grep -v \"^$\")",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:8080/eventos)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:8080/chat)",
+      "Bash(pkill -f \"spring-boot:run\")",
+      "Bash(pkill -f \"comunitymanager\")",
+      "Bash(mvn spring-boot:run -Dspring-boot.run.profiles=dev -q)",
+      "Bash(curl *)",
+      "Bash(kill %1)"
     ]
   }
 }

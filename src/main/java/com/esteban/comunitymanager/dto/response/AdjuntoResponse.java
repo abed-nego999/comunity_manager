@@ -14,17 +14,23 @@ import java.util.UUID;
 public class AdjuntoResponse {
 
     private UUID id;
-    private TipoAdjuntoResponse tipoAdjunto;
+    private UUID eventoId;
+    private String nombreFichero;
     private String rutaFichero;
+    private String tipoMime;
     private OrigenAdjunto origen;
+    private String descripcionIa;
     private Instant subidoEn;
 
     public static AdjuntoResponse from(Adjunto a) {
         return AdjuntoResponse.builder()
                 .id(a.getId())
-                .tipoAdjunto(TipoAdjuntoResponse.from(a.getTipoAdjunto()))
+                .eventoId(a.getEvento().getId())
+                .nombreFichero(a.getNombreFichero())
                 .rutaFichero(a.getRutaFichero())
+                .tipoMime(a.getTipoMime())
                 .origen(a.getOrigen())
+                .descripcionIa(a.getDescripcionIa())
                 .subidoEn(a.getSubidoEn())
                 .build();
     }

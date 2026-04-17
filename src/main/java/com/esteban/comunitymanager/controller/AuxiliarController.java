@@ -11,7 +11,7 @@ import java.util.UUID;
 
 /**
  * Endpoints de solo lectura para los catálogos auxiliares:
- * plataformas, tipos de publicación, tipos de adjunto y roles de conversación.
+ * plataformas, tipos de publicación y roles de conversación.
  */
 @RestController
 @RequestMapping("/api/v1")
@@ -29,11 +29,6 @@ public class AuxiliarController {
     public ResponseEntity<List<TipoPublicacionResponse>> listarTiposPublicacion(
             @RequestParam(required = false) UUID plataformaId) {
         return ResponseEntity.ok(auxiliarService.listarTiposPublicacion(plataformaId));
-    }
-
-    @GetMapping("/tipos-adjunto")
-    public ResponseEntity<List<TipoAdjuntoResponse>> listarTiposAdjunto() {
-        return ResponseEntity.ok(auxiliarService.listarTiposAdjunto());
     }
 
     @GetMapping("/roles-conversacion")

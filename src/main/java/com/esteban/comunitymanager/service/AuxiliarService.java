@@ -21,7 +21,6 @@ public class AuxiliarService {
 
     private final PlataformaRepository plataformaRepository;
     private final TipoPublicacionRepository tipoPublicacionRepository;
-    private final TipoAdjuntoRepository tipoAdjuntoRepository;
     private final RolConversacionRepository rolConversacionRepository;
 
     public List<PlataformaResponse> listarPlataformas() {
@@ -36,12 +35,6 @@ public class AuxiliarService {
                 : tipoPublicacionRepository.findAll();
         return tipos.stream()
                 .map(TipoPublicacionResponse::from)
-                .toList();
-    }
-
-    public List<TipoAdjuntoResponse> listarTiposAdjunto() {
-        return tipoAdjuntoRepository.findAll().stream()
-                .map(TipoAdjuntoResponse::from)
                 .toList();
     }
 

@@ -4,6 +4,7 @@ import com.esteban.comunitymanager.dto.request.FeedbackRequest;
 import com.esteban.comunitymanager.dto.request.PublicacionRequest;
 import com.esteban.comunitymanager.dto.request.PublicarRequest;
 import com.esteban.comunitymanager.dto.response.PublicacionResponse;
+import com.esteban.comunitymanager.exception.PublicacionInmutableException;
 import com.esteban.comunitymanager.exception.ResourceNotFoundException;
 import com.esteban.comunitymanager.model.*;
 import com.esteban.comunitymanager.repository.*;
@@ -50,6 +51,7 @@ public class PublicacionService {
                 .evento(evento)
                 .tipoPublicacion(tipo)
                 .textoGenerado(request.getTextoGenerado())
+                .fechaGeneracion(Instant.now())
                 .estado(EstadoPublicacion.PENDIENTE)
                 .build());
 
@@ -60,7 +62,11 @@ public class PublicacionService {
     @Transactional
     public PublicacionResponse actualizarPublicacion(UUID id, PublicacionRequest request) {
         Publicacion publicacion = buscarPublicacion(id);
+        if (publicacion.getEstado() == EstadoPublicacion.ENVIADA) {
+            throw new PublicacionInmutableException(id);
+        }
         publicacion.setTextoGenerado(request.getTextoGenerado());
+        publicacion.setFechaGeneracion(Instant.now());
         return PublicacionResponse.from(publicacionRepository.save(publicacion));
     }
 
@@ -77,7 +83,9 @@ public class PublicacionService {
     @Transactional
     public PublicacionResponse rechazarPublicacion(UUID id) {
         Publicacion publicacion = buscarPublicacion(id);
-        verificarEstado(publicacion, EstadoPublicacion.PENDIENTE, "rechazar");
+        if (publicacion.getEstado() == EstadoPublicacion.ENVIADA) {
+            throw new IllegalStateException("No se puede rechazar una publicación en estado ENVIADA.");
+        }
         publicacion.setEstado(EstadoPublicacion.RECHAZADA);
         return PublicacionResponse.from(publicacionRepository.save(publicacion));
     }
@@ -85,6 +93,9 @@ public class PublicacionService {
     @Transactional
     public PublicacionResponse solicitarCambios(UUID id, FeedbackRequest request) {
         Publicacion publicacion = buscarPublicacion(id);
+        if (publicacion.getEstado() == EstadoPublicacion.ENVIADA) {
+            throw new PublicacionInmutableException(id);
+        }
         publicacion.setFeedbackUsuario(request.getFeedback());
         publicacion.setEstado(EstadoPublicacion.PENDIENTE);
         return PublicacionResponse.from(publicacionRepository.save(publicacion));

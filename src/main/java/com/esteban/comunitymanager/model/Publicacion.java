@@ -48,6 +48,10 @@ public class Publicacion {
     @Column(name = "id_externo")
     private String idExterno;
 
+    /** Momento en que Claude genera o regenera el contenido del borrador. */
+    @Column(name = "fecha_generacion")
+    private Instant fechaGeneracion;
+
     /** Momento en que la app llama a la API de la plataforma. */
     @Column(name = "fecha_envio")
     private Instant fechaEnvio;

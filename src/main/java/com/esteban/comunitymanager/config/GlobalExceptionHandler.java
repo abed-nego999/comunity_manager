@@ -1,6 +1,7 @@
 package com.esteban.comunitymanager.config;
 
 import com.esteban.comunitymanager.dto.response.ErrorResponse;
+import com.esteban.comunitymanager.exception.PublicacionInmutableException;
 import com.esteban.comunitymanager.exception.ResourceNotFoundException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -34,8 +35,26 @@ public class GlobalExceptionHandler {
                         .build());
     }
 
+    @ExceptionHandler(PublicacionInmutableException.class)
+    public ResponseEntity<ErrorResponse> handlePublicacionInmutable(PublicacionInmutableException ex) {
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(ErrorResponse.builder()
+                        .codigo("CONFLICT")
+                        .mensaje(ex.getMessage())
+                        .build());
+    }
+
     @ExceptionHandler(IllegalStateException.class)
     public ResponseEntity<ErrorResponse> handleIllegalState(IllegalStateException ex) {
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(ErrorResponse.builder()
+                        .codigo("BAD_REQUEST")
+                        .mensaje(ex.getMessage())
+                        .build());
+    }
+
+    @ExceptionHandler(IllegalArgumentException.class)
+    public ResponseEntity<ErrorResponse> handleIllegalArgument(IllegalArgumentException ex) {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                 .body(ErrorResponse.builder()
                         .codigo("BAD_REQUEST")

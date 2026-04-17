@@ -16,6 +16,9 @@ import java.util.UUID;
 @AllArgsConstructor
 public class MensajeRespuestaResponse {
 
+    /** ID del mensaje del usuario guardado en este turno. Usado por el frontend para subir adjuntos con mensajeId. */
+    private UUID mensajeUsuarioId;
+
     private MensajeConversacionResponse mensaje;
 
     /** IDs de publicaciones creadas por Claude mediante Tool Use durante este turno. */

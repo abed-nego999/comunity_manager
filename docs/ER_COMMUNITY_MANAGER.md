@@ -1,7 +1,7 @@
 # Esquema Entidad-Relación — Community Manager
-**Versión:** 4.0  
+**Versión:** 5.5  
 **Fecha:** Abril 2026  
-**Estado:** Cerrado  
+**Estado:** Cerrado
 
 ---
 
@@ -27,10 +27,6 @@ erDiagram
     boolean programacion_externa
   }
   ROL_CONVERSACION {
-    uuid id PK
-    string nombre
-  }
-  TIPO_ADJUNTO {
     uuid id PK
     string nombre
   }
@@ -90,6 +86,7 @@ erDiagram
     text texto_generado
     string estado
     string id_externo
+    timestamp fecha_generacion
     timestamp fecha_envio
     timestamp fecha_publicacion
     string feedback_usuario
@@ -97,20 +94,25 @@ erDiagram
   }
   ADJUNTO {
     uuid id PK
-    uuid id_publicacion FK
-    uuid id_tipo_adjunto FK
+    uuid id_evento FK
+    string nombre_fichero
     string ruta_fichero
+    string tipo_mime
     string origen
+    string prompt_usado
+    string motor
+    text descripcion_ia
     timestamp subido_en
   }
-  IMAGEN_GENERADA {
+  ADJUNTO_PUBLICACION {
     uuid id PK
-    uuid id_evento FK
+    uuid id_adjunto FK
     uuid id_publicacion FK
-    string prompt_usado
-    string ruta_fichero
-    string motor
-    timestamp generado_en
+  }
+  ADJUNTO_MENSAJE {
+    uuid id PK
+    uuid id_adjunto FK
+    uuid id_mensaje FK
   }
 
   PLATAFORMA ||--o{ TIPO_PUBLICACION : "tiene"
@@ -118,16 +120,17 @@ erDiagram
   PLATAFORMA ||--o{ CREDENCIAL : "referenciada en"
   TIPO_PUBLICACION ||--o{ PUBLICACION : "clasifica"
   ROL_CONVERSACION ||--o{ MENSAJE_CONVERSACION : "asignado a"
-  TIPO_ADJUNTO ||--o{ ADJUNTO : "clasifica"
   CLIENTE ||--|| CONFIGURACION_CLIENTE : "tiene"
   CLIENTE ||--o{ CREDENCIAL : "almacena"
   CLIENTE ||--o{ EVENTO : "tiene"
   CONFIGURACION_CLIENTE ||--o{ INSTRUCCION_PLATAFORMA : "contiene"
   EVENTO ||--o{ MENSAJE_CONVERSACION : "contiene"
   EVENTO ||--o{ PUBLICACION : "genera"
-  EVENTO ||--o{ IMAGEN_GENERADA : "tiene"
-  PUBLICACION ||--o{ ADJUNTO : "lleva"
-  PUBLICACION ||--o| IMAGEN_GENERADA : "usa"
+  EVENTO ||--o{ ADJUNTO : "agrupa"
+  ADJUNTO ||--o{ ADJUNTO_PUBLICACION : "asociado a"
+  PUBLICACION ||--o{ ADJUNTO_PUBLICACION : "lleva"
+  ADJUNTO ||--o{ ADJUNTO_MENSAJE : "aparece en"
+  MENSAJE_CONVERSACION ||--o{ ADJUNTO_MENSAJE : "lleva"
 ```
 
 ---
@@ -147,23 +150,23 @@ Tabla auxiliar. Catálogo de redes sociales y canales de publicación soportados
 ---
 
 ### TIPO_PUBLICACION
-Tabla auxiliar. Catálogo de tipos de contenido publicable, ligados a una plataforma concreta. Controla el comportamiento de publicación sin necesidad de tocar código.
+Tabla auxiliar. Catálogo de tipos de contenido publicable, ligados a una plataforma concreta.
 
 | Campo | Descripción |
 |---|---|
 | `id` | Identificador único UUID |
 | `id_plataforma` | FK a PLATAFORMA |
 | `nombre` | Nombre del tipo (ej: Post, Reel, Story, Vídeo) |
-| `publicacion_automatica` | `true` si la app puede publicar vía API, `false` si requiere acción manual |
-| `programacion_externa` | `true` si la plataforma soporta recibir una fecha futura en la llamada API |
+| `publicacion_automatica` | `true` si la app puede publicar vía API |
+| `programacion_externa` | `true` si la plataforma soporta fecha futura en la llamada API |
 
 **Comportamiento según combinación de flags:**
 
 | publicacion_automatica | programacion_externa | Comportamiento |
 |---|---|---|
-| true | true | La app envía a la API con fecha futura — la plataforma gestiona el timing |
+| true | true | La app envía a la API con fecha futura |
 | true | false | La app envía a la API para publicación inmediata |
-| false | false | Manual — el usuario publica a mano (ej: Blog Web) |
+| false | false | Manual — el usuario publica a mano |
 
 **Valores iniciales:**
 
@@ -180,7 +183,7 @@ Tabla auxiliar. Catálogo de tipos de contenido publicable, ligados a una plataf
 ---
 
 ### ROL_CONVERSACION
-Tabla auxiliar. Catálogo de roles posibles en la conversación de un evento.
+Tabla auxiliar. Catálogo de roles posibles en la conversación.
 
 | Campo | Descripción |
 |---|---|
@@ -191,25 +194,13 @@ Tabla auxiliar. Catálogo de roles posibles en la conversación de un evento.
 
 ---
 
-### TIPO_ADJUNTO
-Tabla auxiliar. Catálogo de tipos de archivo adjunto soportados.
-
-| Campo | Descripción |
-|---|---|
-| `id` | Identificador único UUID |
-| `nombre` | Nombre del tipo |
-
-**Valores iniciales:** Imagen, Vídeo
-
----
-
 ### CLIENTE
-Entidad raíz. Representa una organización o marca gestionada desde la aplicación. El switch global de la UI cambia el cliente activo y afecta a todo el contexto.
+Entidad raíz. Representa una organización o marca gestionada desde la aplicación.
 
 | Campo | Descripción |
 |---|---|
 | `id` | Identificador único UUID |
-| `nombre` | Nombre de la organización (ej: "ABS El Pisotón") |
+| `nombre` | Nombre de la organización |
 | `email` | Email de contacto |
 | `telefono` | Teléfono de contacto |
 | `web` | URL del sitio web |
@@ -219,13 +210,13 @@ Entidad raíz. Representa una organización o marca gestionada desde la aplicaci
 ---
 
 ### CONFIGURACION_CLIENTE
-Parámetros generales del system prompt de Claude para un cliente. Las instrucciones específicas por plataforma se almacenan en `INSTRUCCION_PLATAFORMA`.
+Parámetros generales del system prompt de Claude para un cliente.
 
 | Campo | Descripción |
 |---|---|
 | `id` | Identificador único UUID |
 | `id_cliente` | FK a CLIENTE |
-| `tono` | Tono de comunicación (ej: "cercano y entusiasta") |
+| `tono` | Tono de comunicación |
 | `restricciones` | Temas o palabras a evitar |
 | `cta_predeterminada` | Llamada a la acción por defecto |
 | `actualizado_en` | Última modificación |
@@ -233,19 +224,19 @@ Parámetros generales del system prompt de Claude para un cliente. Las instrucci
 ---
 
 ### INSTRUCCION_PLATAFORMA
-Instrucciones específicas de Claude para una plataforma dentro de la configuración de un cliente. La combinación `(id_configuracion, id_plataforma)` debe ser única — restricción de unicidad compuesta en base de datos.
+Instrucciones específicas de Claude por plataforma. La combinación `(id_configuracion, id_plataforma)` debe ser única.
 
 | Campo | Descripción |
 |---|---|
 | `id` | Identificador único UUID |
 | `id_configuracion` | FK a CONFIGURACION_CLIENTE |
 | `id_plataforma` | FK a PLATAFORMA |
-| `instrucciones` | Texto libre con las instrucciones para esa plataforma |
+| `instrucciones` | Texto libre con instrucciones para esa plataforma |
 
 ---
 
 ### CREDENCIAL
-Tokens de acceso a APIs externas cifrados con AES, por cliente y plataforma. El vector de inicialización (`token_iv`) es necesario para descifrar. La clave maestra vive en `.env` y nunca toca la base de datos.
+Tokens de acceso a APIs externas cifrados con AES, por cliente y plataforma.
 
 | Campo | Descripción |
 |---|---|
@@ -254,29 +245,29 @@ Tokens de acceso a APIs externas cifrados con AES, por cliente y plataforma. El 
 | `id_plataforma` | FK a PLATAFORMA |
 | `access_token_cifrado` | Token de acceso cifrado con AES |
 | `refresh_token_cifrado` | Token de refresco cifrado con AES |
-| `token_iv` | Vector de inicialización AES (no secreto, necesario para descifrar) |
+| `token_iv` | Vector de inicialización AES |
 | `expira_en` | Timestamp de expiración del token |
 | `actualizado_en` | Última renovación |
 
 ---
 
 ### EVENTO
-Contenedor principal de trabajo. Agrupa la conversación con Claude y todas las publicaciones generadas para un mismo evento o campaña. Cada evento tiene su propia conversación aislada.
+Contenedor principal de trabajo. Agrupa conversación, adjuntos y publicaciones.
 
 | Campo | Descripción |
 |---|---|
 | `id` | Identificador único UUID |
 | `id_cliente` | FK a CLIENTE |
-| `nombre` | Nombre del evento (ej: "Milonga de verano") |
+| `nombre` | Nombre del evento |
 | `fecha_evento` | Fecha en que ocurre el evento real |
-| `descripcion` | Descripción general |
+| `descripcion` | Descripción general del evento |
 | `estado` | `BORRADOR`, `ACTIVO`, `CERRADO` |
 | `creado_en` | Fecha de creación en el sistema |
 
 ---
 
 ### MENSAJE_CONVERSACION
-Cada turno de la conversación dentro de un evento. El historial completo se envía a la API de Anthropic en cada llamada — Claude no tiene memoria propia.
+Cada turno de la conversación dentro de un evento.
 
 | Campo | Descripción |
 |---|---|
@@ -289,7 +280,7 @@ Cada turno de la conversación dentro de un evento. El historial completo se env
 ---
 
 ### PUBLICACION
-Cada post, reel o vídeo generado por Claude para un evento. El tipo de publicación determina la plataforma destino y el comportamiento de envío.
+Cada post, reel o vídeo generado por Claude para un evento.
 
 | Campo | Descripción |
 |---|---|
@@ -298,21 +289,14 @@ Cada post, reel o vídeo generado por Claude para un evento. El tipo de publicac
 | `id_tipo_publicacion` | FK a TIPO_PUBLICACION |
 | `texto_generado` | Contenido textual generado por Claude |
 | `estado` | `PENDIENTE`, `APROBADA`, `RECHAZADA`, `ENVIADA` |
-| `id_externo` | ID devuelto por Meta o YouTube al enviar (para trazabilidad) |
-| `fecha_envio` | Cuándo la app envió la publicación a la API de la plataforma |
-| `fecha_publicacion` | Cuándo la plataforma publicará o publicó el contenido al público |
-| `feedback_usuario` | Texto libre del usuario al pedir cambios a Claude |
-| `creado_en` | Fecha de generación |
+| `id_externo` | ID devuelto por Meta o YouTube al enviar |
+| `fecha_generacion` | Cuándo Claude generó el contenido |
+| `fecha_envio` | Cuándo la app envió a la API de la plataforma |
+| `fecha_publicacion` | Cuándo la plataforma publicará al público |
+| `feedback_usuario` | Texto libre del usuario al pedir cambios |
+| `creado_en` | Fecha de creación del registro |
 
-**Comportamiento de las fechas:**
-
-| Escenario | fecha_envio | fecha_publicacion |
-|---|---|---|
-| Post normal (inmediato) | Momento del envío | Igual que fecha_envio |
-| Post programado | Momento del envío a la API | Fecha futura elegida por el usuario |
-| Post manual (Blog Web) | null | null o anotada manualmente |
-
-**Ciclo de vida del estado:**
+**Ciclo de vida:**
 ```
 PENDIENTE → APROBADA → ENVIADA
          → RECHAZADA
@@ -321,31 +305,58 @@ PENDIENTE → APROBADA → ENVIADA
 ---
 
 ### ADJUNTO
-Archivo multimedia asociado a una publicación. Puede haber sido subido manualmente por el usuario o generado por Ideogram.
+Entidad central para todos los ficheros del sistema. Sin FKs directas a publicación ni mensaje — las relaciones N-N se gestionan mediante `ADJUNTO_PUBLICACION` y `ADJUNTO_MENSAJE`.
 
 | Campo | Descripción |
 |---|---|
 | `id` | Identificador único UUID |
-| `id_publicacion` | FK a PUBLICACION |
-| `id_tipo_adjunto` | FK a TIPO_ADJUNTO |
-| `ruta_fichero` | Ruta local al fichero |
+| `id_evento` | FK a EVENTO — siempre presente, permite cargar todos los adjuntos del evento para Claude |
+| `nombre_fichero` | Nombre original del fichero |
+| `ruta_fichero` | Ruta local en storage |
+| `tipo_mime` | Tipo MIME (`image/jpeg`, `application/pdf`, `video/mp4`, etc.) |
 | `origen` | `MANUAL` (subido por el usuario) o `GENERADO` (Ideogram) |
-| `subido_en` | Timestamp de subida |
+| `prompt_usado` | Prompt enviado a Ideogram — solo si `origen=GENERADO` |
+| `motor` | Motor de generación (ej: `ideogram-3`) — solo si `origen=GENERADO` |
+| `descripcion_ia` | Descripción en texto generada por Claude al analizar el fichero. Si está rellena se usa en lugar del base64 en llamadas posteriores, evitando el error 429 por acumulación de tokens. |
+| `subido_en` | Timestamp de subida o generación |
+
+**Formatos soportados para subida manual:**
+- Imágenes: `image/jpeg`, `image/png`, `image/gif`, `image/webp`
+- Documentos: `application/pdf`
+- Vídeo: `video/mp4`
+
+**DOC/DOCX no soportados** por la API de Anthropic — deuda técnica aceptada.
+
+**Cómo llegan a Claude:** En cada llamada se cargan todos los adjuntos del evento via `id_evento`. Si `descripcion_ia` está rellena se envía como texto; si es null se envía en base64 (solo la primera vez).
+
+**Almacenamiento:**
+```
+storage/clientes/{id}_{nombre}/eventos/{id}_{nombre}/
+├── adjuntos/    ← ficheros subidos manualmente
+└── generados/  ← imágenes creadas por Ideogram
+```
 
 ---
 
-### IMAGEN_GENERADA
-Imagen creada por Ideogram. Puede estar vinculada a un evento en general (cartel genérico) o a una publicación concreta.
+### ADJUNTO_PUBLICACION
+Tabla de asociación N-N entre adjuntos y publicaciones. Un adjunto puede estar en varias publicaciones y una publicación puede tener varios adjuntos.
 
 | Campo | Descripción |
 |---|---|
 | `id` | Identificador único UUID |
-| `id_evento` | FK a EVENTO (siempre presente) |
-| `id_publicacion` | FK a PUBLICACION (opcional) |
-| `prompt_usado` | Texto del prompt enviado a Ideogram |
-| `ruta_fichero` | Ruta local al fichero generado |
-| `motor` | Motor usado (ej: `ideogram-3`) |
-| `generado_en` | Timestamp de generación |
+| `id_adjunto` | FK a ADJUNTO |
+| `id_publicacion` | FK a PUBLICACION |
+
+---
+
+### ADJUNTO_MENSAJE
+Tabla de asociación N-N entre adjuntos y mensajes. Un adjunto puede aparecer en varios mensajes y un mensaje puede tener varios adjuntos.
+
+| Campo | Descripción |
+|---|---|
+| `id` | Identificador único UUID |
+| `id_adjunto` | FK a ADJUNTO |
+| `id_mensaje` | FK a MENSAJE_CONVERSACION |
 
 ---
 
@@ -358,22 +369,19 @@ Imagen creada por Ideogram. Puede estar vinculada a un evento en general (cartel
 | PLATAFORMA → CREDENCIAL | 1 a N | Una plataforma puede tener credenciales de varios clientes |
 | TIPO_PUBLICACION → PUBLICACION | 1 a N | Un tipo clasifica varias publicaciones |
 | ROL_CONVERSACION → MENSAJE_CONVERSACION | 1 a N | Un rol se asigna a varios mensajes |
-| TIPO_ADJUNTO → ADJUNTO | 1 a N | Un tipo clasifica varios adjuntos |
 | CLIENTE → CONFIGURACION_CLIENTE | 1 a 1 | Cada cliente tiene exactamente una configuración |
 | CLIENTE → CREDENCIAL | 1 a N | Un cliente puede tener credenciales para varias plataformas |
 | CLIENTE → EVENTO | 1 a N | Un cliente puede tener múltiples eventos |
-| CONFIGURACION_CLIENTE → INSTRUCCION_PLATAFORMA | 1 a N | Una configuración tiene instrucciones por plataforma (combinación única) |
+| CONFIGURACION_CLIENTE → INSTRUCCION_PLATAFORMA | 1 a N | Una configuración tiene instrucciones por plataforma |
 | EVENTO → MENSAJE_CONVERSACION | 1 a N | El historial de chat pertenece al evento |
 | EVENTO → PUBLICACION | 1 a N | Un evento genera varias publicaciones |
-| EVENTO → IMAGEN_GENERADA | 1 a N | Un evento puede tener imágenes generadas |
-| PUBLICACION → ADJUNTO | 1 a N | Una publicación puede llevar varios adjuntos |
-| PUBLICACION → IMAGEN_GENERADA | 1 a 0..1 | Una publicación puede usar una imagen generada |
+| EVENTO → ADJUNTO | 1 a N | Un evento agrupa todos sus adjuntos |
+| ADJUNTO ↔ PUBLICACION | N a N | Via ADJUNTO_PUBLICACION — un adjunto puede estar en varias publicaciones |
+| ADJUNTO ↔ MENSAJE_CONVERSACION | N a N | Via ADJUNTO_MENSAJE — un adjunto puede aparecer en varios mensajes |
 
 ---
 
 ## Datos iniciales (seed)
-
-Al arrancar la aplicación por primera vez se insertan automáticamente:
 
 **PLATAFORMA:** Facebook, Instagram, YouTube, Blog Web
 
@@ -391,26 +399,24 @@ Al arrancar la aplicación por primera vez se insertan automáticamente:
 
 **ROL_CONVERSACION:** Usuario, Claude
 
-**TIPO_ADJUNTO:** Imagen, Vídeo
-
 ---
 
 ## Decisiones técnicas registradas
 
-- **Tablas auxiliares normalizadas** — `PLATAFORMA`, `TIPO_PUBLICACION`, `ROL_CONVERSACION` y `TIPO_ADJUNTO` permiten añadir nuevos valores sin tocar código.
-- **INSTRUCCION_PLATAFORMA separada de CONFIGURACION_CLIENTE** — instrucciones editables por plataforma. La combinación `(id_configuracion, id_plataforma)` tiene restricción de unicidad compuesta.
-- **CREDENCIAL cifrada con AES** — tokens cifrados en H2. El `token_iv` se guarda en base de datos; la clave maestra vive en `.env`.
-- **PUBLICACION sin campo plataforma** — la plataforma se deduce a través de `id_tipo_publicacion → TIPO_PUBLICACION → PLATAFORMA`.
-- **TIPO_PUBLICACION.programacion_externa** — delega la programación de publicaciones a la plataforma (Meta/YouTube). La app no tiene scheduler propio.
-- **PUBLICACION.fecha_envio y fecha_publicacion** — dos fechas separadas. `fecha_envio` es cuando la app llama a la API. `fecha_publicacion` es cuando la plataforma publica al público. Coinciden en posts inmediatos, difieren en posts programados.
-- **PUBLICACION.id_externo** — ID devuelto por Meta o YouTube al enviar, para trazabilidad.
-- **PUBLICACION.estado simplificado** — ciclo: `PENDIENTE → APROBADA → ENVIADA` o `PENDIENTE → RECHAZADA`. Sin estado PROGRAMADA — la programación es responsabilidad de la plataforma externa.
-- **Conversación como parte del Evento** — el historial queda ligado al contexto. Cada evento nuevo abre una conversación nueva.
-- **ADJUNTO.origen** — distingue `MANUAL` de `GENERADO` (Ideogram).
-- **IMAGEN_GENERADA con doble FK** — puede pertenecer al evento en general o a una publicación específica.
-- **Sin scheduler en Spring Boot** — no hay publicación automática programada en la app. Meta y YouTube gestionan su propio timing cuando `programacion_externa=true`.
+- **Tablas auxiliares normalizadas** — `PLATAFORMA`, `TIPO_PUBLICACION`, `ROL_CONVERSACION` permiten añadir valores sin tocar código.
+- **INSTRUCCION_PLATAFORMA separada de CONFIGURACION_CLIENTE** — unicidad compuesta `(id_configuracion, id_plataforma)`.
+- **CREDENCIAL cifrada con AES** — clave maestra en `.env`.
+- **PUBLICACION sin campo plataforma** — se deduce via `id_tipo_publicacion → TIPO_PUBLICACION → PLATAFORMA`.
+- **TIPO_PUBLICACION.programacion_externa** — delega programación a Meta/YouTube. Sin scheduler en la app.
+- **ADJUNTO.id_evento siempre presente** — permite cargar todos los adjuntos del evento para Claude en una sola query, sin joins.
+- **ADJUNTO sin FKs directas a publicacion ni mensaje** — las relaciones N-N se resuelven con tablas de asociación `ADJUNTO_PUBLICACION` y `ADJUNTO_MENSAJE`. Esto permite que un adjunto esté en varias publicaciones y en varios mensajes simultáneamente sin sobreescribir nada.
+- **ADJUNTO.descripcion_ia** — Claude analiza el fichero la primera vez (base64) y persiste una descripción. En llamadas posteriores se usa la descripción en lugar del base64, evitando el error 429 por acumulación de tokens.
+- **Eliminación segura de adjuntos** — antes de borrar un `ADJUNTO`, verificar que no existen registros en `ADJUNTO_PUBLICACION` ni `ADJUNTO_MENSAJE` que lo referencien. Si existen, desasociar solo la referencia solicitada; borrar el fichero físico y el registro solo cuando no queden referencias.
+- **Tres fechas en PUBLICACION** — `fecha_generacion`, `fecha_envio` y `fecha_publicacion` separadas.
+- **PUBLICACION.estado** — ciclo: `PENDIENTE → APROBADA → ENVIADA` o `RECHAZADA`. Las publicaciones ENVIADAS son inmutables.
+- **Sin scheduler** — programación delegada a Meta/YouTube.
 - **Sin gestión de usuarios** — software local de usuario único.
 
 ---
 
-*Documento actualizado el 12 de abril de 2026. Actualizar con cada decisión técnica relevante.*
+*Documento actualizado el 17 de abril de 2026. Actualizar con cada decisión técnica relevante.*

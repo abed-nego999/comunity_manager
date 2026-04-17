@@ -1,6 +1,6 @@
 # Documento de Requisitos Técnicos
 ## Community Manager
-**Versión:** 2.0  
+**Versión:** 3.0  
 **Fecha:** Abril 2026  
 **Estado:** En desarrollo
 
@@ -18,7 +18,7 @@ El primer cliente es la Asociación de Bailes de Salón El Pisotón, pero la arq
 
 | Componente | Tecnología |
 |---|---|
-| Lenguaje | Java 26 |
+| Lenguaje | Java 25 |
 | Framework | Spring Boot 3.4.x |
 | Gestor de dependencias | Maven 3.9.x |
 | Vistas | Thymeleaf |
@@ -55,10 +55,10 @@ El primer cliente es la Asociación de Bailes de Salón El Pisotón, pero la arq
 El usuario accede a una interfaz conversacional donde puede:
 
 - Redactar una petición en lenguaje natural describiendo un evento o solicitud de contenido.
-- Adjuntar fotos o vídeos asociados a la petición.
-- Seleccionar el cliente activo mediante el switch general.
+- Adjuntar ficheros de contexto al evento (imágenes, PDFs) desde el chat.
+- Seleccionar el cliente activo mediante el switch general en la barra lateral.
 
-La interfaz se comporta como un chat normal, pero Claude puede generar publicaciones reales en base de datos por detrás mediante Tool Use sin intervención del usuario. Claude puede hacer preguntas de aclaración antes de generar contenido.
+La interfaz se comporta como un chat normal, pero Claude puede generar publicaciones reales en base de datos por detrás mediante Tool Use. Claude puede hacer preguntas de aclaración antes de generar contenido.
 
 Cada conversación está ligada a un **Evento** concreto. Al crear un evento nuevo se abre una conversación nueva. El historial completo de la conversación se envía a Claude en cada turno — Claude no tiene memoria propia.
 
@@ -68,40 +68,42 @@ Cada conversación está ligada a un **Evento** concreto. Al crear un evento nue
 
 **Generación de texto:**
 - Motor: Anthropic API (Claude Sonnet 4.6).
-- Claude opera mediante **Tool Use**: llama a endpoints de la API REST de Spring Boot para crear eventos, publicaciones e imágenes directamente en base de datos.
-- El system prompt se construye a partir de los campos de `CONFIGURACION_CLIENTE` e `INSTRUCCION_PLATAFORMA`, y es editable desde el panel web sin reiniciar la aplicación.
-- En perfil `dev`, las llamadas a Claude se simulan con mocks para no consumir créditos.
+- Claude opera mediante **Tool Use**: llama a endpoints de la API REST de Spring Boot para crear publicaciones directamente en base de datos.
+- El system prompt se construye dinámicamente en cada llamada concatenando:
+    1. Parte fija desde `src/main/resources/prompts/system-prompt-base.txt`
+    2. Configuración del cliente (`CONFIGURACION_CLIENTE` e `INSTRUCCION_PLATAFORMA`)
+    3. Datos del evento activo (nombre, fecha, descripción)
+- Los adjuntos de contexto del evento se envían a Claude como bloques de contenido (imágenes en base64, PDFs como documentos).
 
 **Generación de cartelería:**
 - Motor: Ideogram 3 API (`$0.08` por imagen).
 - Se activa cuando el usuario solicita explícitamente la generación de un cartel.
-- Claude genera el texto del cartel e Ideogram genera la imagen.
 - En perfil `dev`, las llamadas a Ideogram se simulan con mocks.
 
-**Adjuntos manuales:**
-- Para posts que no requieran cartel generado por IA, el usuario adjunta la imagen o vídeo manualmente en el panel de aprobación antes de aprobar la publicación.
+**Adjuntos manuales de publicación:**
+- El usuario adjunta imagen o vídeo en el panel de aprobación antes de aprobar la publicación.
 
 ---
 
 ### 4.3 Módulo de eventos — Panel de control principal
 
-Vista en cuadros donde cada tarjeta representa un **evento**. Un evento es un contenedor que agrupa la conversación con Claude y todas las publicaciones generadas para un mismo evento o campaña.
+Vista en cuadros donde cada tarjeta representa un **evento**.
 
-Cada tarjeta de evento muestra:
+Cada tarjeta muestra: nombre, fecha, estado y acceso al detalle.
 
-- Nombre y fecha del evento.
-- Publicaciones futuras programadas.
-- Imágenes generadas asociadas.
-- Información general del evento.
-- Acceso a la **ventana de detalle del evento**.
+Controles disponibles:
+- **Nuevo evento** — formulario con nombre, fecha y descripción.
+- **Editar evento** — permite modificar nombre y descripción del evento activo.
 
 **Ventana de detalle del evento:**
 
 | Sección | Contenido |
 |---|---|
-| Publicaciones pendientes | Drafts generados por Claude pendientes de aprobación |
-| Publicaciones enviadas | Aprobadas y enviadas a la plataforma |
-| Publicaciones rechazadas | Historial de publicaciones descartadas |
+| Pendientes | Publicaciones en estado PENDIENTE |
+| Aprobadas | Publicaciones en estado APROBADA o ENVIADA |
+| Rechazadas | Publicaciones en estado RECHAZADA |
+
+Cada publicación muestra badge de plataforma, texto truncado, fecha y botones de acción según estado.
 
 ---
 
@@ -109,71 +111,85 @@ Cada tarjeta de evento muestra:
 
 Para cada publicación generada, el usuario puede:
 
-- **Aprobar** → la publicación pasa a estado `APROBADA`, lista para enviar.
-- **Rechazar** → la publicación queda registrada como `RECHAZADA` en el historial.
-- **Pedir cambios** → el usuario escribe feedback en texto libre y continúa la conversación para que Claude regenere el contenido.
-- **Adjuntar archivo** → imagen o vídeo que acompañará a la publicación.
-- **Establecer fecha de publicación** → solo disponible si `programacion_externa=true` en el tipo de publicación.
+- **Aprobar** → estado `APROBADA`.
+- **Rechazar** → estado `RECHAZADA`.
+- **Pedir cambios** → feedback en texto libre, Claude regenera.
+- **Adjuntar archivo** → imagen o vídeo que acompañará la publicación.
+- **Establecer fecha de publicación** → solo si `programacion_externa=true`.
 
 ---
 
 ### 4.5 Módulo de publicación — Integraciones con plataformas
 
-La publicación se realiza mediante un endpoint explícito `POST /publicaciones/{id}/publicar`, separado del cambio de estado. Esto evita mezclar una operación local (aprobar) con una llamada a una API externa (publicar).
+La publicación se realiza mediante `POST /publicaciones/{id}/publicar`, separado del cambio de estado.
 
-Al publicar, la app guarda en `PUBLICACION`:
-- `fecha_envio` — momento en que la app llama a la API de la plataforma.
-- `fecha_publicacion` — fecha en que la plataforma publicará el contenido al público (puede ser futura si `programacion_externa=true`).
-- `id_externo` — ID devuelto por Meta o YouTube para trazabilidad.
-
-El comportamiento de publicación se determina por los flags del `TIPO_PUBLICACION`:
+Al publicar se guarda: `fecha_envio`, `fecha_publicacion` e `id_externo`.
 
 | publicacion_automatica | programacion_externa | Comportamiento |
 |---|---|---|
-| true | true | Envío a API con fecha futura — la plataforma gestiona el timing |
-| true | false | Envío a API para publicación inmediata |
-| false | false | Manual — el usuario publica a mano |
+| true | true | Envío a API con fecha futura |
+| true | false | Envío a API inmediato |
+| false | false | Manual |
 
-**No existe scheduler en la aplicación.** La programación de publicaciones se delega completamente a Meta y YouTube, que tienen sus propios planificadores.
+**No existe scheduler en la aplicación.**
 
-| Plataforma | Tipo | publicacion_automatica | programacion_externa |
-|---|---|---|---|
-| Facebook | Post | true | true |
-| Facebook | Evento | true | true |
-| Facebook | Reel | true | false |
-| Instagram | Post | true | true |
-| Instagram | Story | true | false |
-| YouTube | Vídeo | true | true |
-| Blog Web | Post | false | false |
-
-> **Nota:** La integración con WordPress REST API queda pospuesta indefinidamente. Los posts de blog se gestionan de forma manual.
+> La integración con WordPress REST API queda pospuesta indefinidamente.
 
 ---
 
 ### 4.6 Módulo de configuración
 
-Panel web editable sin reiniciar la aplicación que permite configurar por cliente:
+Panel web editable sin reiniciar la aplicación:
 
 - Nombre y datos del cliente.
-- Tono, restricciones y llamada a la acción predeterminada del system prompt de Claude.
-- Instrucciones específicas por plataforma (`INSTRUCCION_PLATAFORMA`), editables de forma independiente para cada red social.
-- Credenciales de APIs externas (cifradas con AES en base de datos).
+- Tono, restricciones y llamada a la acción del system prompt.
+- Instrucciones específicas por plataforma.
+- Credenciales de APIs externas (cifradas con AES).
 
 ---
 
-### 4.7 Switch general de cliente
+### 4.7 Barra lateral de navegación
 
-Selector visible en toda la aplicación que permite cambiar el contexto activo entre distintos clientes. Al cambiar de cliente:
+Barra lateral expandible visible en toda la aplicación:
 
-- El system prompt de Claude carga la configuración del cliente seleccionado.
-- El panel de eventos muestra solo los eventos de ese cliente.
-- Las publicaciones se dirigen a las cuentas de redes sociales de ese cliente.
+- **Colapsada** (~60px): solo emojis.
+- **Expandida** (~220px): emoji + texto.
+- Estado persiste en `localStorage`.
+- Secciones: 💬 Chat, 📅 Eventos.
+- Selector de cliente activo — persiste en sesión al navegar.
 
 ---
 
-## 5. API REST
+## 5. Adjuntos de contexto del evento
 
-Toda la lógica de negocio se realiza mediante la API REST. Tanto el frontend (Thymeleaf) como Claude (Tool Use) interactúan con la aplicación a través de estos endpoints. La especificación completa está en `openapi.yaml`.
+Los adjuntos de contexto son ficheros que el usuario sube al evento para que Claude disponga de información adicional al generar contenido. Se distinguen de los adjuntos de publicación, que acompañan a un post concreto.
+
+### 5.1 Formatos soportados
+
+| Tipo | Extensiones | Cómo se envía a Claude |
+|---|---|---|
+| Imagen | jpg, jpeg, png, gif, webp | Base64 en bloque `image` |
+| Documento | pdf | Bloque `document` |
+
+**DOC/DOCX no están soportados** por la API de Anthropic. Deuda técnica aceptada — el usuario debe convertir a PDF antes de subir.
+
+### 5.2 Almacenamiento
+
+```
+storage/clientes/{id}_{nombre}/eventos/{id}_{nombre}/contexto/
+```
+
+### 5.3 Flujo
+
+1. El usuario sube un fichero de contexto desde el chat o el panel del evento.
+2. Se guarda en disco y se registra en `ADJUNTO_CONTEXTO`.
+3. En cada llamada a Claude, la app carga todos los adjuntos de contexto del evento y los incluye como bloques de contenido en la petición a la API de Anthropic.
+
+---
+
+## 6. API REST
+
+Toda la lógica de negocio se realiza mediante la API REST. Especificación completa en `openapi.yaml`.
 
 ### Grupos de endpoints
 
@@ -181,169 +197,118 @@ Toda la lógica de negocio se realiza mediante la API REST. Tanto el frontend (T
 |---|---|---|
 | Auxiliares | `/plataformas`, `/tipos-publicacion`, `/tipos-adjunto`, `/roles-conversacion` | Catálogos de solo lectura |
 | Clientes | `/clientes` | CRUD de clientes |
-| Configuración | `/clientes/{id}/configuracion` | System prompt e instrucciones por plataforma |
-| Credenciales | `/clientes/{id}/credenciales` | Tokens de acceso a APIs externas |
-| Eventos | `/eventos` | Gestión de eventos y conversación con Claude |
+| Configuración | `/clientes/{id}/configuracion` | System prompt e instrucciones |
+| Credenciales | `/clientes/{id}/credenciales` | Tokens de acceso cifrados |
+| Eventos | `/eventos` | Gestión de eventos y conversación |
+| Adjuntos contexto | `/eventos/{id}/adjuntos-contexto` | Ficheros de contexto para Claude |
 | Publicaciones | `/publicaciones` | Ciclo de vida de publicaciones |
-| Adjuntos | `/publicaciones/{id}/adjuntos` | Archivos multimedia |
+| Adjuntos | `/publicaciones/{id}/adjuntos` | Archivos multimedia de publicaciones |
 
-### Ciclo de vida de una publicación vía API
+### Ciclo de vida de una publicación
 
 ```
-POST   /publicaciones              → Claude crea borrador (estado: PENDIENTE)
-PATCH  /publicaciones/{id}/aprobar → Usuario aprueba (estado: APROBADA)
-POST   /publicaciones/{id}/publicar → App llama a Meta/YouTube (estado: ENVIADA)
-
-PATCH  /publicaciones/{id}/rechazar          → Usuario rechaza (estado: RECHAZADA)
-PATCH  /publicaciones/{id}/solicitar-cambios → Usuario pide cambios con feedback
-PUT    /publicaciones/{id}                   → Claude actualiza contenido
+POST   /publicaciones              → Claude crea borrador (PENDIENTE)
+PATCH  /publicaciones/{id}/aprobar → Usuario aprueba (APROBADA)
+POST   /publicaciones/{id}/publicar → App llama a Meta/YouTube (ENVIADA)
+PATCH  /publicaciones/{id}/rechazar → Usuario rechaza (RECHAZADA)
+PATCH  /publicaciones/{id}/solicitar-cambios → Feedback del usuario
+PUT    /publicaciones/{id}          → Claude actualiza contenido
 ```
 
 ---
 
-## 6. Almacenamiento de ficheros
-
-### 6.1 Estructura de carpetas
+## 7. Almacenamiento de ficheros
 
 ```
 {storage.base-path}/
 └── clientes/
-    └── {id-cliente}_{nombre-cliente-sanitizado}/
+    └── {id-cliente}_{nombre-sanitizado}/
         └── eventos/
-            └── {id-evento}_{nombre-evento-sanitizado}/
-                ├── adjuntos/       ← subidos manualmente por el usuario
-                └── generados/     ← imágenes creadas por Ideogram
+            └── {id-evento}_{nombre-sanitizado}/
+                ├── adjuntos/     ← adjuntos de publicaciones
+                ├── contexto/     ← ficheros de contexto para Claude
+                └── generados/   ← imágenes creadas por Ideogram
 ```
 
-**Ejemplo:**
-```
-storage/
-└── clientes/
-    └── a1b2c3_abs-el-pisoton/
-        └── eventos/
-            └── f4e5d6_milonga-de-verano/
-                ├── adjuntos/
-                │   ├── foto-evento.jpg
-                │   └── video-promo.mp4
-                └── generados/
-                    └── cartel-milonga.png
-```
+Ruta base configurable: `storage.base-path=./storage`
 
-### 6.2 Configuración de la ruta base
-
-```properties
-storage.base-path=./storage
-```
-
-### 6.3 Sanitización de nombres
-
-- Conversión a minúsculas.
-- Espacios y caracteres especiales reemplazados por guiones.
-- Tildes y caracteres no ASCII eliminados.
-- Emojis eliminados.
-
-Ejemplo: `"Milonga de Verano 🎶"` → `milonga-de-verano`
-
-### 6.4 Gitignore
-
-La carpeta `storage/` se incluye en `.gitignore`.
+Sanitización: minúsculas, sin tildes, sin emojis, espacios a guiones.
 
 ---
 
-## 7. Seguridad de credenciales
+## 8. Seguridad de credenciales
 
-Las API keys y tokens de acceso a Meta Graph API y YouTube Data API se almacenan cifrados en H2 mediante AES:
-
-- `access_token` y `refresh_token` se cifran antes de persistir usando un `AttributeConverter` de Spring Data JPA.
-- El vector de inicialización AES (`token_iv`) se guarda junto al token cifrado en base de datos (no es secreto).
-- La clave maestra de cifrado vive en `.env` y nunca toca la base de datos ni el repositorio.
-- Los tokens **nunca se devuelven en claro** desde la API REST — los endpoints de credenciales solo devuelven metadatos (plataforma, fecha de expiración).
+- Tokens cifrados con AES mediante `AttributeConverter`.
+- `token_iv` en base de datos; clave maestra en `.env`.
+- Tokens nunca devueltos en claro por la API.
 
 ```properties
-# .env (excluido de git)
-AES_SECRET_KEY=clave-maestra-de-32-caracteres-minimo
+# .env
+AES_SECRET_KEY=clave-de-32-caracteres-minimo
+ANTHROPIC_API_KEY=sk-ant-...
 ```
 
 ---
 
-## 8. Configuración técnica de la base de datos
+## 9. Configuración técnica de la base de datos
 
 ```properties
 spring.datasource.url=jdbc:h2:file:./data/social-manager
-spring.datasource.driver-class-name=org.h2.Driver
-spring.datasource.username=admin
-spring.datasource.password=admin
 spring.jpa.hibernate.ddl-auto=update
 spring.h2.console.enabled=true
 spring.h2.console.path=/h2-console
 ```
 
-Las carpetas `data/` y `storage/` y los ficheros `*.mv.db`, `*.trace.db` y `.env` se incluyen en `.gitignore`.
+---
+
+## 10. Perfiles de entorno
+
+| Perfil | Claude | Ideogram | H2 Console | Swagger UI |
+|---|---|---|---|---|
+| `dev` | Real | Mock | ✅ | ✅ |
+| `prod` | Real | Real | ❌ | ❌ |
 
 ---
 
-## 9. Perfiles de entorno
-
-### Perfil `dev`
-- Mocks activos para Claude e Ideogram (sin gasto de créditos).
-- Consola H2 disponible en `/h2-console`.
-- Swagger UI disponible en `/swagger-ui.html`.
-- Logs en nivel DEBUG.
-- Spring DevTools activo.
-
-### Perfil `prod`
-- APIs reales activas.
-- Consola H2 desactivada.
-- Swagger UI desactivado.
-- Logs en nivel ERROR/INFO.
-
----
-
-## 10. Costes en producción
+## 11. Costes en producción
 
 | Servicio | Uso estimado | Coste/mes |
 |---|---|---|
-| Anthropic API (Claude Sonnet 4.6) | ~24 posts/mes × ~500 tokens | ~$0.50 |
-| Ideogram API | ~6 carteles/mes × $0.08 | ~$0.50 |
+| Anthropic API (Claude Sonnet 4.6) | ~24 posts/mes | ~$0.50 |
+| Ideogram API | ~6 carteles/mes | ~$0.50 |
 | Meta Graph API | Ilimitado | $0.00 |
 | YouTube Data API v3 | 10.000 unidades/día gratis | $0.00 |
 | **Total** | | **~$1.00/mes** |
 
 ---
 
-## 11. Fases de desarrollo
+## 12. Fases de desarrollo
 
 | Fase | Descripción | Estado |
 |---|---|---|
-| 0 | Entorno de desarrollo (Node, Maven, IntelliJ, Claude Code) | ✅ Completada |
-| 1 | Proyecto Spring Boot base + API REST + integración Anthropic (Tool Use) + panel de aprobación | 🔄 En curso |
-| 2 | Integración Meta Graph API (Facebook + Instagram) + endpoint `/publicar` | ⏳ Pendiente |
-| 3 | Integración YouTube Data API v3 | ⏳ Pendiente |
-| 4 | Generación de cartelería con Ideogram 3 API | ⏳ Pendiente |
+| 0 | Entorno de desarrollo | ✅ Completada |
+| 1 | Spring Boot base + API REST + Tool Use + chat + eventos | 🔄 En curso |
+| 2 | Meta Graph API (Facebook + Instagram) | ⏳ Pendiente |
+| 3 | YouTube Data API v3 | ⏳ Pendiente |
+| 4 | Ideogram 3 API | ⏳ Pendiente |
 
 ---
 
-## 12. Decisiones técnicas registradas
+## 13. Decisiones técnicas registradas
 
-- H2 en modo fichero para persistencia local sin instalar nada adicional.
-- `ddl-auto=update` para no perder datos al redesplegar durante el desarrollo.
-- Mocks de APIs externas en perfil `dev` para desarrollo sin coste.
-- Toda la lógica de negocio se expone mediante API REST. Tanto el frontend como Claude (Tool Use) usan los mismos endpoints.
-- Claude opera mediante Tool Use llamando directamente a los endpoints de la API REST.
-- El system prompt se construye a partir de `CONFIGURACION_CLIENTE` e `INSTRUCCION_PLATAFORMA`, editable desde el panel sin tocar código.
-- La conversación con Claude es parte del Evento — cada evento tiene su propio historial aislado.
-- Aprobación y publicación son operaciones separadas — `PATCH /aprobar` cambia estado local, `POST /publicar` llama a la API externa.
-- Sin scheduler en Spring Boot — la programación de publicaciones se delega a Meta/YouTube mediante el flag `programacion_externa` en `TIPO_PUBLICACION`.
-- Dos fechas en `PUBLICACION`: `fecha_envio` (cuando la app llama a la API) y `fecha_publicacion` (cuando la plataforma publica al público).
-- `PUBLICACION.id_externo` almacena el ID devuelto por Meta o YouTube para trazabilidad.
-- Ciclo de vida simplificado: `PENDIENTE → APROBADA → ENVIADA` o `PENDIENTE → RECHAZADA`.
-- Credenciales de APIs externas cifradas con AES en H2. Clave maestra en `.env`. Tokens nunca devueltos en claro por la API.
-- Ficheros multimedia organizados en `storage/clientes/{id}_{nombre}/eventos/{id}_{nombre}/` con subcarpetas `adjuntos/` y `generados/`.
-- Ruta base de almacenamiento configurable en `application.properties`.
-- Nombres de carpeta sanitizados automáticamente (minúsculas, sin tildes, sin emojis, espacios a guiones).
-- `TIPO_PUBLICACION` controla el comportamiento de publicación mediante dos flags: `publicacion_automatica` y `programacion_externa`. No varía por cliente.
-- Swagger UI disponible en perfil `dev` mediante springdoc-openapi.
+- H2 en modo fichero. `ddl-auto=update` para no perder datos al redesplegar.
+- Claude real activo en todos los perfiles — el mock está desactivado.
+- System prompt construido en tres capas: base fija (txt) + configuración cliente (BBDD) + datos evento activo.
+- Adjuntos de contexto separados de adjuntos de publicación — entidades y propósitos distintos.
+- Adjuntos de contexto enviados a Claude en cada llamada como bloques de contenido.
+- DOC/DOCX no soportados por Anthropic — deuda técnica aceptada.
+- Aprobación y publicación son operaciones separadas.
+- Sin scheduler — programación delegada a Meta/YouTube.
+- Credenciales cifradas con AES. Tokens nunca en claro.
+- Nombres de carpeta sanitizados automáticamente.
+- Barra lateral con estado persistente en localStorage.
+- Selector de cliente activo persiste en sesión al navegar entre vistas.
 
 ---
 
-*Documento actualizado el 12 de abril de 2026. Actualizar con cada decisión técnica relevante.*
+*Documento actualizado el 14 de abril de 2026. Actualizar con cada decisión técnica relevante.*
