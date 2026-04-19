@@ -435,6 +435,80 @@
             padding: 40px 20px;
         }
 
+        /* ── Modal de publicación programada ───────────────────────────────────── */
+        .modal-seccion-label {
+            font-size: 11px;
+            font-weight: 700;
+            color: #65676b;
+            text-transform: uppercase;
+            letter-spacing: .4px;
+            margin: 0 0 8px;
+        }
+
+        .fechas-chips {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            margin-bottom: 14px;
+        }
+
+        .fecha-chip {
+            background: #f0f2f5;
+            border: 1px solid #dde0e4;
+            border-radius: 14px;
+            padding: 5px 13px;
+            font-size: 12px;
+            font-weight: 600;
+            color: #1c1e21;
+            cursor: pointer;
+            transition: background .15s, border-color .15s;
+            white-space: nowrap;
+            font-family: inherit;
+        }
+
+        .fecha-chip:hover { background: #e4e6eb; }
+
+        .fecha-chip.selected {
+            background: #d4ccff;
+            border-color: #7c6af7;
+            color: #4a3ab5;
+        }
+
+        .checkbox-row {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 13px;
+            color: #1c1e21;
+            cursor: pointer;
+            margin-bottom: 4px;
+            user-select: none;
+        }
+
+        .checkbox-row input[type="checkbox"] {
+            width: 15px;
+            height: 15px;
+            cursor: pointer;
+            margin: 0;
+            padding: 0;
+            border: none;
+        }
+
+        /* Fecha programada — aparece entre la cabecera y el texto */
+        .pub-programado {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            background: #fff8e1;
+            color: #e65100;
+            border: 1px solid #ffcc80;
+            border-radius: 4px;
+            padding: 3px 9px;
+            font-size: 11px;
+            font-weight: 600;
+            margin: 8px 0 4px;
+        }
+
         /* ── Modales ─────────────────────────────────────────────────────────── */
         .modal-overlay {
             position: fixed;
@@ -666,6 +740,36 @@
             <div class="modal-actions">
                 <button class="btn-cancelar-modal" id="cancelarFeedbackModal">Cancelar</button>
                 <button class="btn-crear-evento" id="confirmarFeedbackModal">Enviar a Claude</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ── Modal programar publicación ──────────────────────────────────────── -->
+    <div class="modal-overlay" id="modalPublicar" style="display:none">
+        <div class="modal">
+            <h2>Programar publicación</h2>
+
+            <!-- Chips de fechas recomendadas (solo si hay insights) -->
+            <div id="seccFechasRecomendadas" style="display:none">
+                <p class="modal-seccion-label">Momentos recomendados</p>
+                <div class="fechas-chips" id="fechasChipsContainer"></div>
+            </div>
+
+            <!-- Selector fecha/hora -->
+            <div id="seccFechaHora">
+                <label for="inputFechaPublicacion">Fecha y hora de publicación</label>
+                <input type="datetime-local" id="inputFechaPublicacion">
+            </div>
+
+            <!-- Publicar de inmediato -->
+            <label class="checkbox-row">
+                <input type="checkbox" id="checkInmediato">
+                Publicar de inmediato
+            </label>
+
+            <div class="modal-actions">
+                <button class="btn-cancelar-modal" id="cancelarPublicar" type="button">Cancelar</button>
+                <button class="btn-crear-evento" id="confirmarPublicar" type="button">Publicar</button>
             </div>
         </div>
     </div>
@@ -926,10 +1030,13 @@
             'YouTube': 'YouTube', 'Blog Web': 'Blog'
         }[plataformaNombre] || 'other';
 
+        const esProgramada = pub.fechaPublicacion
+            && (pub.estado === 'PENDIENTE' || pub.estado === 'APROBADA');
+
         const partesFecha = [];
         if (pub.fechaGeneracion)  partesFecha.push('Generado: '  + formatFechaCompleta(pub.fechaGeneracion));
         if (pub.fechaEnvio)       partesFecha.push('Enviado: '   + formatFechaCompleta(pub.fechaEnvio));
-        if (pub.fechaPublicacion) partesFecha.push('Publicado: ' + formatFechaCompleta(pub.fechaPublicacion));
+        if (pub.fechaPublicacion && !esProgramada) partesFecha.push('Publicado: ' + formatFechaCompleta(pub.fechaPublicacion));
         const headerTxt = plataformaNombre + ' · ' + tipoNombre
             + (partesFecha.length ? ' · ' + partesFecha.join(' | ') : '');
 
@@ -938,6 +1045,13 @@
         header.title = headerTxt;
         header.textContent = headerTxt;
         card.appendChild(header);
+
+        if (esProgramada) {
+            const chip = document.createElement('div');
+            chip.className = 'pub-programado';
+            chip.textContent = '📅 Programado: ' + formatFechaCompleta(pub.fechaPublicacion);
+            card.appendChild(chip);
+        }
 
         // ── Texto generado ────────────────────────────────────────────────────
         const texto = document.createElement('div');
@@ -980,7 +1094,7 @@
             container.appendChild(btn('✎ Pedir cambios', 'btn-cambios',    () => abrirModalFeedback(pub.id)));
             container.appendChild(btn('+ Imagen',        'btn-anadir-img', () => iniciarSubidaAdjunto(pub.id)));
         } else if (pub.estado === 'APROBADA') {
-            container.appendChild(btn('↑ Publicar',  'btn-publicar', () => publicar(pub.id)));
+            container.appendChild(btn('↑ Publicar',  'btn-publicar', () => abrirModalPublicar(pub.id, pub.fechaPublicacion)));
             container.appendChild(btn('✗ Rechazar', 'btn-rechazar',  () => rechazar(pub.id)));
         }
         // ENVIADA y RECHAZADA: sin botones
@@ -1103,13 +1217,150 @@
         } catch (err) { mostrarToast('Error: ' + err.message); }
     }
 
-    async function publicar(id) {
+    // ── Modal de publicación programada ───────────────────────────────────────
+    let publicarPubId      = null;
+    let fechasRecomendadas = [];
+
+    const diasSemanaMap = {
+        MONDAY:1, TUESDAY:2, WEDNESDAY:3, THURSDAY:4,
+        FRIDAY:5, SATURDAY:6, SUNDAY:0
+    };
+    const diasCortos  = ['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'];
+    const mesesCortos = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
+
+    function formatChip(fecha) {
+        return diasCortos[fecha.getDay()] + ' ' + fecha.getDate()
+            + ' ' + mesesCortos[fecha.getMonth()]
+            + ' · ' + String(fecha.getHours()).padStart(2,'0') + ':00';
+    }
+
+    function toDatetimeLocalValue(fecha) {
+        const p = n => String(n).padStart(2,'0');
+        return fecha.getFullYear() + '-' + p(fecha.getMonth()+1) + '-' + p(fecha.getDate())
+            + 'T' + p(fecha.getHours()) + ':' + p(fecha.getMinutes());
+    }
+
+    function calcularFechasRecomendadas(franjas) {
+        const ahora = new Date();
+        const resultados = [];
+        for (const f of franjas) {
+            const targetDow = diasSemanaMap[f.diaSemana];
+            const candidata = new Date();
+            candidata.setHours(f.hora, 0, 0, 0);
+            let diasHasta = (targetDow - candidata.getDay() + 7) % 7;
+            if (diasHasta === 0 && candidata <= ahora) diasHasta = 7;
+            candidata.setDate(candidata.getDate() + diasHasta);
+            resultados.push(candidata);
+        }
+        resultados.sort((a, b) => a - b);
+        return resultados.filter((f, i, arr) =>
+            i === 0 || f.getTime() !== arr[i-1].getTime()).slice(0, 3);
+    }
+
+    window.abrirModalPublicar = async function abrirModalPublicar(pubId, fechaPublicacionActual) {
+        console.log("abrirModalPublicar llamada", pubId);
+        const modal = document.getElementById('modalPublicar');
+        if (!modal) return;
+        modal.style.display = 'flex';
+
+        publicarPubId = pubId;
+        fechasRecomendadas = [];
+
+        const inputFecha = document.getElementById('inputFechaPublicacion');
+        const checkInm   = document.getElementById('checkInmediato');
+        const seccChips  = document.getElementById('seccFechasRecomendadas');
+        const chipsContn = document.getElementById('fechasChipsContainer');
+        const seccFecha  = document.getElementById('seccFechaHora');
+
+        if (checkInm)   { checkInm.checked = false; }
+        if (inputFecha) { inputFecha.disabled = false; }
+        if (seccFecha)  { seccFecha.style.opacity = '1'; seccFecha.style.pointerEvents = ''; }
+        if (seccChips)  { seccChips.style.display = 'none'; seccChips.style.opacity = '1'; seccChips.style.pointerEvents = ''; }
+        if (chipsContn) { chipsContn.innerHTML = ''; }
+        const btnConfirmar = document.getElementById('confirmarPublicar');
+        if (btnConfirmar) btnConfirmar.disabled = false;
+
+        if (inputFecha) {
+            inputFecha.value = fechaPublicacionActual
+                ? toDatetimeLocalValue(new Date(fechaPublicacionActual))
+                : '';
+        }
+
+        // Cargar insights para generar chips
+        if (clienteIdActivo && chipsContn && seccChips && inputFecha) {
+            try {
+                const franjas = await fetchJson('/api/v1/clientes/' + clienteIdActivo + '/insights');
+                if (franjas && franjas.length > 0) {
+                    fechasRecomendadas = calcularFechasRecomendadas(franjas);
+                    if (fechasRecomendadas.length > 0) {
+                        if (!fechaPublicacionActual) {
+                            inputFecha.value = toDatetimeLocalValue(fechasRecomendadas[0]);
+                        }
+                        fechasRecomendadas.forEach((fecha, idx) => {
+                            const chip = document.createElement('button');
+                            chip.type = 'button';
+                            chip.className = 'fecha-chip' + (idx === 0 && !fechaPublicacionActual ? ' selected' : '');
+                            chip.textContent = formatChip(fecha);
+                            chip.addEventListener('click', () => {
+                                document.querySelectorAll('.fecha-chip').forEach(c => c.classList.remove('selected'));
+                                chip.classList.add('selected');
+                                inputFecha.value = toDatetimeLocalValue(fecha);
+                            });
+                            chipsContn.appendChild(chip);
+                        });
+                        seccChips.style.display = 'block';
+                    }
+                }
+            } catch (_) { /* Sin insights: solo mostrar selector */ }
+        }
+    };
+
+    document.getElementById('checkInmediato').addEventListener('change', function() {
+        const inputFecha = document.getElementById('inputFechaPublicacion');
+        const seccChips  = document.getElementById('seccFechasRecomendadas');
+        const disabled   = this.checked;
+        if (inputFecha) inputFecha.disabled = disabled;
+        if (seccChips)  { seccChips.style.opacity = disabled ? '.4' : '1'; seccChips.style.pointerEvents = disabled ? 'none' : ''; }
+        const seccFecha = document.getElementById('seccFechaHora');
+        if (seccFecha) seccFecha.style.opacity = disabled ? '.4' : '1';
+    });
+
+    document.getElementById('cancelarPublicar').addEventListener('click', () => {
+        document.getElementById('modalPublicar').style.display = 'none';
+        publicarPubId = null;
+    });
+
+    document.getElementById('modalPublicar').addEventListener('click', e => {
+        if (e.target === document.getElementById('modalPublicar')) {
+            document.getElementById('modalPublicar').style.display = 'none';
+            publicarPubId = null;
+        }
+    });
+
+    document.getElementById('confirmarPublicar').addEventListener('click', async () => {
+        if (!publicarPubId) return;
+        const checkInm   = document.getElementById('checkInmediato');
+        const inputFecha = document.getElementById('inputFechaPublicacion');
+
         try {
-            await fetchJson('/api/v1/publicaciones/' + id + '/publicar', { method: 'POST' });
+            let options;
+            if ((checkInm && checkInm.checked) || !inputFecha || !inputFecha.value) {
+                options = { method: 'POST' };
+            } else {
+                const fechaIso = inputFecha.value + ':00';
+                options = {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ fechaPublicacion: fechaIso })
+                };
+            }
+            await fetchJson('/api/v1/publicaciones/' + publicarPubId + '/publicar', options);
+            document.getElementById('modalPublicar').style.display = 'none';
+            publicarPubId = null;
             mostrarToast('Publicación enviada');
             await cargarPublicacionesEvento(eventoActivo.id);
         } catch (err) { mostrarToast('Error: ' + err.message); }
-    }
+    });
 
     // ── Modal pedir cambios ────────────────────────────────────────────────────
     function abrirModalFeedback(pubId) {

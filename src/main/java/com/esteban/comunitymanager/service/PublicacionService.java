@@ -13,6 +13,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
+import java.time.ZoneId;
 import java.util.List;
 import java.util.UUID;
 
@@ -47,14 +48,19 @@ public class PublicacionService {
         TipoPublicacion tipo = tipoPublicacionRepository.findById(request.getIdTipoPublicacion())
                 .orElseThrow(() -> ResourceNotFoundException.of("TipoPublicacion", request.getIdTipoPublicacion()));
 
-        Publicacion publicacion = publicacionRepository.save(Publicacion.builder()
+        Publicacion.PublicacionBuilder builder = Publicacion.builder()
                 .evento(evento)
                 .tipoPublicacion(tipo)
                 .textoGenerado(request.getTextoGenerado())
                 .fechaGeneracion(Instant.now())
-                .estado(EstadoPublicacion.PENDIENTE)
-                .build());
+                .estado(EstadoPublicacion.PENDIENTE);
 
+        if (request.getFechaPublicacion() != null) {
+            builder.fechaPublicacion(
+                request.getFechaPublicacion().atZone(ZoneId.of("Europe/Madrid")).toInstant());
+        }
+
+        Publicacion publicacion = publicacionRepository.save(builder.build());
         return PublicacionResponse.from(publicacion);
     }
 
@@ -67,6 +73,10 @@ public class PublicacionService {
         }
         publicacion.setTextoGenerado(request.getTextoGenerado());
         publicacion.setFechaGeneracion(Instant.now());
+        if (request.getFechaPublicacion() != null) {
+            publicacion.setFechaPublicacion(
+                request.getFechaPublicacion().atZone(ZoneId.of("Europe/Madrid")).toInstant());
+        }
         return PublicacionResponse.from(publicacionRepository.save(publicacion));
     }
 
@@ -124,9 +134,9 @@ public class PublicacionService {
         Instant ahora = Instant.now();
         publicacion.setFechaEnvio(ahora);
 
-        // Si el tipo soporta programación externa y se pasó una fecha futura, se usa esa fecha
-        if (tipo.isProgramacionExterna() && request != null && request.getFechaPublicacion() != null) {
-            publicacion.setFechaPublicacion(request.getFechaPublicacion());
+        if (request != null && request.getFechaPublicacion() != null) {
+            publicacion.setFechaPublicacion(
+                request.getFechaPublicacion().atZone(ZoneId.of("Europe/Madrid")).toInstant());
         } else {
             publicacion.setFechaPublicacion(ahora);
         }

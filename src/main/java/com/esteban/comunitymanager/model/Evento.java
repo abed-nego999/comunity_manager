@@ -45,4 +45,7 @@ public class Evento {
     @CreationTimestamp
     @Column(name = "creado_en", updatable = false, nullable = false)
     private Instant creadoEn;
+
+    @Column(name = "resumen_conversacion", columnDefinition = "TEXT")
+    private String resumenConversacion;
 }

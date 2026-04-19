@@ -2,7 +2,7 @@ package com.esteban.comunitymanager.dto.request;
 
 import lombok.*;
 
-import java.time.Instant;
+import java.time.LocalDateTime;
 
 @Data
 @Builder
@@ -11,8 +11,9 @@ import java.time.Instant;
 public class PublicarRequest {
 
     /**
-     * Fecha futura de publicación. Solo se aplica si el tipo de publicación
-     * tiene programacion_externa=true. Si es null, se publica de forma inmediata.
+     * Fecha y hora de publicación programada en formato ISO 8601 sin zona
+     * (ej: "2026-04-22T20:00:00"). Se interpreta en zona Europe/Madrid.
+     * Si es null, se publica de forma inmediata.
      */
-    private Instant fechaPublicacion;
+    private LocalDateTime fechaPublicacion;
 }

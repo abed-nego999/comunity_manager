@@ -2,7 +2,9 @@ package com.esteban.comunitymanager.controller;
 
 import com.esteban.comunitymanager.dto.request.ClienteRequest;
 import com.esteban.comunitymanager.dto.response.ClienteResponse;
+import com.esteban.comunitymanager.dto.response.InsightFranjaResponse;
 import com.esteban.comunitymanager.service.ClienteService;
+import com.esteban.comunitymanager.service.MetaService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -18,6 +20,7 @@ import java.util.UUID;
 public class ClienteController {
 
     private final ClienteService clienteService;
+    private final MetaService metaService;
 
     @GetMapping
     public ResponseEntity<List<ClienteResponse>> listarClientes() {
@@ -45,5 +48,11 @@ public class ClienteController {
     public ResponseEntity<Void> eliminarCliente(@PathVariable UUID id) {
         clienteService.eliminarCliente(id);
         return ResponseEntity.noContent().build();
+    }
+
+    /** Devuelve las franjas horarias óptimas para publicar, calculadas desde los insights de Meta. */
+    @GetMapping("/{id}/insights")
+    public ResponseEntity<List<InsightFranjaResponse>> obtenerInsights(@PathVariable UUID id) {
+        return ResponseEntity.ok(metaService.obtenerFranjasOptimas(id));
     }
 }

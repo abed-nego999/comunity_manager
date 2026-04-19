@@ -6,6 +6,7 @@ import com.esteban.comunitymanager.dto.response.PublicacionResponse;
 import com.esteban.comunitymanager.model.*;
 import com.esteban.comunitymanager.repository.*;
 import com.esteban.comunitymanager.service.AdjuntoService;
+import com.esteban.comunitymanager.service.MetaService;
 import com.esteban.comunitymanager.service.PublicacionService;
 import com.esteban.comunitymanager.service.StorageService;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -23,6 +24,9 @@ import org.springframework.web.client.RestClient;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -48,6 +52,10 @@ public class ClaudeServiceImpl implements ClaudeService {
     private static final int MAX_TOKENS = 8096;
     private static final int MAX_TOKENS_DESCRIPCION = 200;
     private static final int MAX_ITERACIONES = 10;
+    private static final int MAX_HISTORIAL = 20;
+    private static final int MENSAJES_RECIENTES = 6;
+    private static final DateTimeFormatter FMT_CALENDARIO =
+            DateTimeFormatter.ofPattern("dd/MM HH:mm").withZone(ZoneId.of("Europe/Madrid"));
 
     @Value("${ANTHROPIC_API_KEY:}")
     private String apiKey;
@@ -63,7 +71,9 @@ public class ClaudeServiceImpl implements ClaudeService {
     private final AdjuntoRepository adjuntoRepository;
     private final PublicacionRepository publicacionRepository;
     private final TipoPublicacionRepository tipoPublicacionRepository;
+    private final MensajeConversacionRepository mensajeConversacionRepository;
     private final StorageService storageService;
+    private final MetaService metaService;
 
     private String systemPromptBase;
     private RestClient anthropicClient;
@@ -76,7 +86,9 @@ public class ClaudeServiceImpl implements ClaudeService {
                              AdjuntoRepository adjuntoRepository,
                              PublicacionRepository publicacionRepository,
                              TipoPublicacionRepository tipoPublicacionRepository,
-                             StorageService storageService) {
+                             MensajeConversacionRepository mensajeConversacionRepository,
+                             StorageService storageService,
+                             MetaService metaService) {
         this.objectMapper = objectMapper;
         this.publicacionService = publicacionService;
         this.adjuntoService = adjuntoService;
@@ -85,7 +97,9 @@ public class ClaudeServiceImpl implements ClaudeService {
         this.adjuntoRepository = adjuntoRepository;
         this.publicacionRepository = publicacionRepository;
         this.tipoPublicacionRepository = tipoPublicacionRepository;
+        this.mensajeConversacionRepository = mensajeConversacionRepository;
         this.storageService = storageService;
+        this.metaService = metaService;
     }
 
     @PostConstruct
@@ -106,19 +120,26 @@ public class ClaudeServiceImpl implements ClaudeService {
     public ClaudeRespuesta enviarConversacion(String systemPrompt, List<MensajeConversacion> historial, UUID eventoId) {
         Evento evento = eventoRepository.findById(eventoId).orElse(null);
         List<TipoPublicacion> tipos = tipoPublicacionRepository.findAll();
-        List<Publicacion> publicacionesEvento = publicacionRepository.findByEventoId(eventoId);
+        List<Publicacion> publicacionesCalendario = publicacionRepository.findTop5ByEventoIdOrderByFechaGeneracionDesc(eventoId);
         List<Adjunto> todosAdjuntos = adjuntoRepository.findByEventoId(eventoId);
 
         // Los adjuntos van en el system prompt como texto (descripcionIa) — nunca en base64
-        String seccionEvento = buildSeccionEvento(evento, tipos, publicacionesEvento, todosAdjuntos);
+        String seccionEvento = buildSeccionEvento(evento, tipos, publicacionesCalendario, todosAdjuntos);
+        String seccionInsights = buildSeccionInsights(evento);
         String fullSystemPrompt = systemPromptBase.trim()
                 + "\n\n" + systemPrompt.trim()
-                + "\n\n" + seccionEvento;
+                + "\n\n" + seccionEvento
+                + (seccionInsights.isBlank() ? "" : "\n\n" + seccionInsights);
 
+        log.debug("[Claude] System prompt enviado a Anthropic:\n{}", fullSystemPrompt);
         log.debug("[Claude] Adjuntos del evento {}: {} en system prompt", eventoId, todosAdjuntos.size());
 
+        // Compactado automático si el historial supera MAX_HISTORIAL mensajes
+        List<MensajeConversacion> historialTrabajo = compactarSiNecesario(historial, evento);
+
         // Mensajes solo como texto plano — sin ningún bloque base64
-        List<Object> messages = buildMessages(historial);
+        String resumen = evento != null ? evento.getResumenConversacion() : null;
+        List<Object> messages = buildMessages(historialTrabajo, resumen);
 
         // Log del último mensaje del usuario antes de enviarlo a Anthropic
         if (!messages.isEmpty()) {
@@ -280,16 +301,19 @@ public class ClaudeServiceImpl implements ClaudeService {
         }
 
         if (publicaciones != null && !publicaciones.isEmpty()) {
-            sb.append("\nPUBLICACIONES DEL EVENTO:\n");
+            sb.append("\nCALENDARIO DE PUBLICACIONES DEL EVENTO (últimas 5):\n");
             publicaciones.forEach(p -> {
                 String plataforma = p.getTipoPublicacion().getPlataforma().getNombre();
                 String tipo       = p.getTipoPublicacion().getNombre();
+                String generado   = p.getFechaGeneracion() != null
+                        ? FMT_CALENDARIO.format(p.getFechaGeneracion()) : "sin fecha";
+                String programado = p.getFechaPublicacion() != null
+                        ? FMT_CALENDARIO.format(p.getFechaPublicacion()) : "sin fecha";
                 sb.append("- ID: ").append(p.getId())
                         .append(" | ").append(plataforma).append(" - ").append(tipo)
-                        .append(" | Estado: ").append(p.getEstado());
-                if (p.getFechaGeneracion() != null) {
-                    sb.append(" | Generado: ").append(p.getFechaGeneracion());
-                }
+                        .append(" | Estado: ").append(p.getEstado()).append("\n")
+                        .append("  Generado: ").append(generado)
+                        .append(" | Programado: ").append(programado);
                 if (p.getFeedbackUsuario() != null && !p.getFeedbackUsuario().isBlank()) {
                     sb.append(" | Feedback: ").append(p.getFeedbackUsuario());
                 }
@@ -300,6 +324,71 @@ public class ClaudeServiceImpl implements ClaudeService {
         return sb.toString().trim();
     }
 
+    // ── Insights de Meta para el system prompt ───────────────────────────────
+
+    private String buildSeccionInsights(Evento evento) {
+        if (evento == null || evento.getCliente() == null) return "";
+        try {
+            String datosJson = metaService.obtenerInsights(evento.getCliente().getId());
+            if (datosJson == null || datosJson.isBlank()) return "";
+            String resumen = metaService.resumirInsights(datosJson);
+            if (resumen == null || resumen.isBlank()) return "";
+            return "INSIGHTS DE PUBLICACIÓN (Facebook/Instagram):\n" + resumen;
+        } catch (Exception e) {
+            log.debug("[Claude] No se pudieron obtener insights para el system prompt: {}", e.getMessage());
+            return "";
+        }
+    }
+
+    // ── Compactado automático del historial ───────────────────────────────────
+
+    private List<MensajeConversacion> compactarSiNecesario(List<MensajeConversacion> historial, Evento evento) {
+        if (evento == null || historial.size() <= MAX_HISTORIAL) {
+            return historial;
+        }
+
+        int corte = historial.size() - MENSAJES_RECIENTES;
+        List<MensajeConversacion> aCompactar = historial.subList(0, corte);
+
+        StringBuilder convText = new StringBuilder();
+        convText.append("Resume la siguiente conversación en un párrafo conciso que preserve los hechos clave: ")
+                .append("eventos creados, publicaciones generadas, feedback dado y decisiones tomadas. ")
+                .append("No incluyas saludos ni frases de cortesía.\n\n");
+        for (MensajeConversacion m : aCompactar) {
+            String rol = mapRol(m.getRol().getNombre());
+            convText.append("user".equals(rol) ? "Usuario" : "Asistente")
+                    .append(": ").append(m.getContenido()).append("\n\n");
+        }
+
+        try {
+            Map<String, Object> body = new HashMap<>();
+            body.put("model", MODEL);
+            body.put("max_tokens", 1024);
+            body.put("messages", List.of(Map.of("role", "user", "content", convText.toString())));
+
+            JsonNode response = llamarAnthropicApi(body);
+            String resumen = "";
+            for (JsonNode block : response.path("content")) {
+                if ("text".equals(block.path("type").asText())) {
+                    resumen = block.path("text").asText();
+                    break;
+                }
+            }
+
+            if (!resumen.isBlank()) {
+                evento.setResumenConversacion(resumen);
+                eventoRepository.save(evento);
+                List<UUID> idsEliminar = aCompactar.stream().map(MensajeConversacion::getId).toList();
+                mensajeConversacionRepository.deleteAllById(idsEliminar);
+                log.info("[Claude] Conversación compactada: {} mensajes eliminados", idsEliminar.size());
+                return new ArrayList<>(historial.subList(corte, historial.size()));
+            }
+        } catch (Exception e) {
+            log.warn("[Claude] No se pudo compactar la conversación: {}", e.getMessage());
+        }
+        return historial;
+    }
+
     // ── Construcción de mensajes — solo texto plano ───────────────────────────
 
     /**
@@ -307,7 +396,7 @@ public class ClaudeServiceImpl implements ClaudeService {
      * Los adjuntos NO viajan en los mensajes — van en el system prompt como texto.
      * Deduplica mensajes consecutivos del mismo rol (ej: reintento sin respuesta previa).
      */
-    private List<Object> buildMessages(List<MensajeConversacion> historial) {
+    private List<Object> buildMessages(List<MensajeConversacion> historial, String resumenConversacion) {
         List<MensajeConversacion> deduplicado = new ArrayList<>();
         for (MensajeConversacion m : historial) {
             if (!deduplicado.isEmpty()) {
@@ -320,11 +409,19 @@ public class ClaudeServiceImpl implements ClaudeService {
             deduplicado.add(m);
         }
 
-        return deduplicado.stream()
+        List<Object> result = new ArrayList<>();
+        if (resumenConversacion != null && !resumenConversacion.isBlank()) {
+            result.add(Map.of("role", "user",
+                    "content", "[Resumen de conversación anterior]: " + resumenConversacion));
+            result.add(Map.of("role", "assistant",
+                    "content", "Entendido, continúo con el contexto anterior."));
+        }
+        deduplicado.stream()
                 .map(m -> (Object) Map.of(
                         "role", mapRol(m.getRol().getNombre()),
                         "content", m.getContenido()))
-                .collect(Collectors.toList());
+                .forEach(result::add);
+        return result;
     }
 
     // ── Llamada HTTP ──────────────────────────────────────────────────────────
@@ -366,6 +463,10 @@ public class ClaudeServiceImpl implements ClaudeService {
                     req.setEventoId(UUID.fromString(input.path("eventoId").asText()));
                     req.setIdTipoPublicacion(UUID.fromString(input.path("idTipoPublicacion").asText()));
                     req.setTextoGenerado(input.path("textoGenerado").asText());
+                    if (input.has("fechaPublicacion") && !input.path("fechaPublicacion").isNull()
+                            && !input.path("fechaPublicacion").asText().isBlank()) {
+                        req.setFechaPublicacion(LocalDateTime.parse(input.path("fechaPublicacion").asText()));
+                    }
                     PublicacionResponse pub = publicacionService.crearPublicacion(req);
                     publicacionesCreadas.add(pub.getId());
                     yield "OK. Publicación creada."
@@ -380,6 +481,10 @@ public class ClaudeServiceImpl implements ClaudeService {
                     req.setEventoId(UUID.fromString(input.path("eventoId").asText()));
                     req.setIdTipoPublicacion(UUID.fromString(input.path("idTipoPublicacion").asText()));
                     req.setTextoGenerado(input.path("textoGenerado").asText());
+                    if (input.has("fechaPublicacion") && !input.path("fechaPublicacion").isNull()
+                            && !input.path("fechaPublicacion").asText().isBlank()) {
+                        req.setFechaPublicacion(LocalDateTime.parse(input.path("fechaPublicacion").asText()));
+                    }
                     PublicacionResponse pub = publicacionService.actualizarPublicacion(pubId, req);
                     yield "OK. Publicación " + pub.getId() + " actualizada correctamente.";
                 }
@@ -460,7 +565,9 @@ public class ClaudeServiceImpl implements ClaudeService {
                                         "idTipoPublicacion", Map.of("type", "string",
                                                 "description", "UUID del tipo de publicación (determina plataforma y tipo de contenido)"),
                                         "textoGenerado", Map.of("type", "string",
-                                                "description", "Contenido textual completo de la publicación, listo para publicar")
+                                                "description", "Contenido textual completo de la publicación, listo para publicar"),
+                                        "fechaPublicacion", Map.of("type", "string",
+                                                "description", "Fecha y hora de publicación programada en formato ISO 8601 (ej: 2026-04-22T20:00:00). Opcional. Si se proporciona, la publicación quedará programada para esa fecha. Si se omite, queda sin fecha asignada.")
                                 ),
                                 "required", List.of("eventoId", "idTipoPublicacion", "textoGenerado")
                         )
@@ -479,7 +586,9 @@ public class ClaudeServiceImpl implements ClaudeService {
                                         "idTipoPublicacion", Map.of("type", "string",
                                                 "description", "UUID del tipo de publicación"),
                                         "textoGenerado", Map.of("type", "string",
-                                                "description", "Nuevo contenido textual de la publicación")
+                                                "description", "Nuevo contenido textual de la publicación"),
+                                        "fechaPublicacion", Map.of("type", "string",
+                                                "description", "Fecha y hora de publicación programada en formato ISO 8601 (ej: 2026-04-22T20:00:00). Opcional. Si se proporciona, la publicación quedará programada para esa fecha. Si se omite, queda sin fecha asignada.")
                                 ),
                                 "required", List.of("id", "eventoId", "idTipoPublicacion", "textoGenerado")
                         )

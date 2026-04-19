@@ -1,5 +1,5 @@
 # Esquema Entidad-Relación — Community Manager
-**Versión:** 5.5  
+**Versión:** 5.6  
 **Fecha:** Abril 2026  
 **Estado:** Cerrado
 
@@ -114,6 +114,13 @@ erDiagram
     uuid id_adjunto FK
     uuid id_mensaje FK
   }
+  INSIGHT_PAGINA {
+    uuid id PK
+    uuid id_cliente FK
+    uuid id_plataforma FK
+    text datos_json
+    timestamp actualizado_en
+  }
 
   PLATAFORMA ||--o{ TIPO_PUBLICACION : "tiene"
   PLATAFORMA ||--o{ INSTRUCCION_PLATAFORMA : "referenciada en"
@@ -131,6 +138,8 @@ erDiagram
   PUBLICACION ||--o{ ADJUNTO_PUBLICACION : "lleva"
   ADJUNTO ||--o{ ADJUNTO_MENSAJE : "aparece en"
   MENSAJE_CONVERSACION ||--o{ ADJUNTO_MENSAJE : "lleva"
+  CLIENTE ||--o{ INSIGHT_PAGINA : "tiene"
+  PLATAFORMA ||--o{ INSIGHT_PAGINA : "referenciada en"
 ```
 
 ---
@@ -360,6 +369,21 @@ Tabla de asociación N-N entre adjuntos y mensajes. Un adjunto puede aparecer en
 
 ---
 
+### INSIGHT_PAGINA
+Caché de insights de Meta por cliente y plataforma. Se refresca automáticamente si tiene más de 7 días.
+
+| Campo | Descripción |
+|---|---|
+| `id` | Identificador único UUID |
+| `id_cliente` | FK a CLIENTE |
+| `id_plataforma` | FK a PLATAFORMA |
+| `datos_json` | Payload completo devuelto por Meta Insights API, guardado tal cual |
+| `actualizado_en` | Fecha de última actualización — si tiene más de 7 días se refresca |
+
+**Uso:** Al construir el system prompt, si hay insights disponibles se incluye un resumen de los mejores momentos para publicar. Claude usa ese dato para sugerir fechas de programación óptimas.
+
+---
+
 ## Relaciones
 
 | Relación | Cardinalidad | Descripción |
@@ -378,6 +402,8 @@ Tabla de asociación N-N entre adjuntos y mensajes. Un adjunto puede aparecer en
 | EVENTO → ADJUNTO | 1 a N | Un evento agrupa todos sus adjuntos |
 | ADJUNTO ↔ PUBLICACION | N a N | Via ADJUNTO_PUBLICACION — un adjunto puede estar en varias publicaciones |
 | ADJUNTO ↔ MENSAJE_CONVERSACION | N a N | Via ADJUNTO_MENSAJE — un adjunto puede aparecer en varios mensajes |
+| CLIENTE → INSIGHT_PAGINA | 1 a N | Un cliente tiene insights por cada plataforma |
+| PLATAFORMA → INSIGHT_PAGINA | 1 a N | Una plataforma puede tener insights de varios clientes |
 
 ---
 
@@ -410,6 +436,7 @@ Tabla de asociación N-N entre adjuntos y mensajes. Un adjunto puede aparecer en
 - **TIPO_PUBLICACION.programacion_externa** — delega programación a Meta/YouTube. Sin scheduler en la app.
 - **ADJUNTO.id_evento siempre presente** — permite cargar todos los adjuntos del evento para Claude en una sola query, sin joins.
 - **ADJUNTO sin FKs directas a publicacion ni mensaje** — las relaciones N-N se resuelven con tablas de asociación `ADJUNTO_PUBLICACION` y `ADJUNTO_MENSAJE`. Esto permite que un adjunto esté en varias publicaciones y en varios mensajes simultáneamente sin sobreescribir nada.
+- **INSIGHT_PAGINA** — caché de insights de Meta en BBDD con refresco lazy cada 7 días. Se incluye resumen en el system prompt para que Claude sugiera fechas óptimas de publicación.
 - **ADJUNTO.descripcion_ia** — Claude analiza el fichero la primera vez (base64) y persiste una descripción. En llamadas posteriores se usa la descripción en lugar del base64, evitando el error 429 por acumulación de tokens.
 - **Eliminación segura de adjuntos** — antes de borrar un `ADJUNTO`, verificar que no existen registros en `ADJUNTO_PUBLICACION` ni `ADJUNTO_MENSAJE` que lo referencien. Si existen, desasociar solo la referencia solicitada; borrar el fichero físico y el registro solo cuando no queden referencias.
 - **Tres fechas en PUBLICACION** — `fecha_generacion`, `fecha_envio` y `fecha_publicacion` separadas.

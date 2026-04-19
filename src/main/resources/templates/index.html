@@ -722,6 +722,27 @@
                 </div>
             </div>
 
+            <!-- Modal programar publicación -->
+            <div class="modal-overlay" id="ev-modalPublicar" style="display:none">
+                <div class="modal">
+                    <h2>Programar publicación</h2>
+                    <div id="ev-seccFechasRecomendadas" style="display:none">
+                        <p style="font-size:11px;font-weight:700;color:#65676b;text-transform:uppercase;letter-spacing:.4px;margin:0 0 8px;">Momentos recomendados</p>
+                        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px" id="ev-fechasChipsContainer"></div>
+                    </div>
+                    <label for="ev-inputFechaPublicacion">Fecha y hora de publicación</label>
+                    <input type="datetime-local" id="ev-inputFechaPublicacion">
+                    <label style="display:flex;align-items:center;gap:8px;font-size:13px;color:#1c1e21;cursor:pointer;margin-bottom:12px;user-select:none;font-weight:normal">
+                        <input type="checkbox" id="ev-checkInmediato" style="width:15px;height:15px;cursor:pointer;margin:0">
+                        Publicar de inmediato
+                    </label>
+                    <div class="modal-actions">
+                        <button class="btn-cancelar-modal" id="ev-cancelarPublicar" type="button">Cancelar</button>
+                        <button class="btn-crear-evento"   id="ev-confirmarPublicar" type="button">Publicar</button>
+                    </div>
+                </div>
+            </div>
+
             <!-- File input para adjuntos de publicación -->
             <input type="file" id="evFileInputAdjunto" style="display:none"
                    accept=".jpg,.jpeg,.png,.gif,.webp,.mp4,image/jpeg,image/png,image/gif,image/webp,video/mp4">
@@ -1508,9 +1529,7 @@ function evAdjuntarBotones(container, pub) {
         container.appendChild(btn('✎ Pedir cambios', 'btn-cambios',    () => evAbrirModalFeedback(pub.id)));
         container.appendChild(btn('+ Imagen',        'btn-anadir-img', () => evIniciarSubidaAdjunto(pub.id)));
     } else if (pub.estado === 'APROBADA') {
-        if (pub.tipoPublicacion?.publicacionAutomatica) {
-            container.appendChild(btn('↑ Publicar', 'btn-publicar', () => evPublicar(pub.id)));
-        }
+        container.appendChild(btn('↑ Publicar', 'btn-publicar', () => evAbrirModalPublicar(pub.id, pub.fechaPublicacion)));
         container.appendChild(btn('✗ Rechazar', 'btn-rechazar', () => evRechazar(pub.id)));
     }
 }
@@ -1590,10 +1609,128 @@ async function evRechazar(id) {
     try { await evFetchJson('/api/v1/publicaciones/' + id + '/rechazar', { method: 'PATCH' }); mostrarToast('Publicación rechazada'); await evCargarPublicaciones(evEvento.id); }
     catch (err) { mostrarToast('Error: ' + err.message); }
 }
-async function evPublicar(id) {
-    try { await evFetchJson('/api/v1/publicaciones/' + id + '/publicar', { method: 'POST' }); mostrarToast('Publicación enviada'); await evCargarPublicaciones(evEvento.id); }
-    catch (err) { mostrarToast('Error: ' + err.message); }
+let evPublicarPubId      = null;
+let evFechasRecomendadas = [];
+
+const evDiasSemanaMap = { MONDAY:1,TUESDAY:2,WEDNESDAY:3,THURSDAY:4,FRIDAY:5,SATURDAY:6,SUNDAY:0 };
+const evDiasCortos    = ['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'];
+const evMesesCortos   = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
+
+function evFormatChip(fecha) {
+    return evDiasCortos[fecha.getDay()] + ' ' + fecha.getDate()
+        + ' ' + evMesesCortos[fecha.getMonth()]
+        + ' · ' + String(fecha.getHours()).padStart(2,'0') + ':00';
 }
+function evToDatetimeLocalValue(fecha) {
+    const p = n => String(n).padStart(2,'0');
+    return fecha.getFullYear() + '-' + p(fecha.getMonth()+1) + '-' + p(fecha.getDate())
+        + 'T' + p(fecha.getHours()) + ':' + p(fecha.getMinutes());
+}
+function evCalcFechasRecomendadas(franjas) {
+    const ahora = new Date();
+    const res = [];
+    for (const f of franjas) {
+        const c = new Date();
+        c.setHours(f.hora, 0, 0, 0);
+        let d = (evDiasSemanaMap[f.diaSemana] - c.getDay() + 7) % 7;
+        if (d === 0 && c <= ahora) d = 7;
+        c.setDate(c.getDate() + d);
+        res.push(c);
+    }
+    res.sort((a, b) => a - b);
+    return res.filter((f, i, arr) => i === 0 || f.getTime() !== arr[i-1].getTime()).slice(0, 3);
+}
+
+async function evAbrirModalPublicar(pubId, fechaPublicacionActual) {
+    console.log("abrirModalPublicar llamada", pubId);
+    const modal = document.getElementById('ev-modalPublicar');
+    if (!modal) return;
+    modal.style.display = 'flex';
+
+    evPublicarPubId = pubId;
+    evFechasRecomendadas = [];
+
+    const inputFecha = document.getElementById('ev-inputFechaPublicacion');
+    const checkInm   = document.getElementById('ev-checkInmediato');
+    const seccChips  = document.getElementById('ev-seccFechasRecomendadas');
+    const chipsContn = document.getElementById('ev-fechasChipsContainer');
+
+    if (checkInm)   checkInm.checked = false;
+    if (inputFecha) { inputFecha.disabled = false; inputFecha.style.opacity = '1'; }
+    if (seccChips)  { seccChips.style.display = 'none'; seccChips.style.opacity = '1'; seccChips.style.pointerEvents = ''; }
+    if (chipsContn) chipsContn.innerHTML = '';
+    const btnConfEv = document.getElementById('ev-confirmarPublicar');
+    if (btnConfEv) btnConfEv.disabled = false;
+
+    if (inputFecha) {
+        inputFecha.value = fechaPublicacionActual
+            ? evToDatetimeLocalValue(new Date(fechaPublicacionActual))
+            : '';
+    }
+
+    if (clienteIdActivo && chipsContn && seccChips && inputFecha) {
+        try {
+            const franjas = await evFetchJson('/api/v1/clientes/' + clienteIdActivo + '/insights');
+            if (franjas && franjas.length > 0) {
+                evFechasRecomendadas = evCalcFechasRecomendadas(franjas);
+                if (evFechasRecomendadas.length > 0) {
+                    if (!fechaPublicacionActual) inputFecha.value = evToDatetimeLocalValue(evFechasRecomendadas[0]);
+                    evFechasRecomendadas.forEach((fecha, idx) => {
+                        const chip = document.createElement('button');
+                        chip.type = 'button';
+                        chip.style.cssText = 'background:#f0f2f5;border:1px solid #dde0e4;border-radius:14px;padding:5px 13px;font-size:12px;font-weight:600;color:#1c1e21;cursor:pointer;white-space:nowrap;font-family:inherit';
+                        chip.textContent = evFormatChip(fecha);
+                        if (idx === 0 && !fechaPublicacionActual) chip.style.background = '#d4ccff';
+                        chip.addEventListener('click', () => {
+                            chipsContn.querySelectorAll('button').forEach(c => c.style.background = '#f0f2f5');
+                            chip.style.background = '#d4ccff';
+                            inputFecha.value = evToDatetimeLocalValue(fecha);
+                        });
+                        chipsContn.appendChild(chip);
+                    });
+                    seccChips.style.display = 'block';
+                }
+            }
+        } catch (_) { /* Sin insights */ }
+    }
+}
+
+document.getElementById('ev-checkInmediato').addEventListener('change', function() {
+    const inputFecha = document.getElementById('ev-inputFechaPublicacion');
+    const seccChips  = document.getElementById('ev-seccFechasRecomendadas');
+    if (inputFecha) { inputFecha.disabled = this.checked; inputFecha.style.opacity = this.checked ? '.4' : '1'; }
+    if (seccChips)  { seccChips.style.opacity = this.checked ? '.4' : '1'; seccChips.style.pointerEvents = this.checked ? 'none' : ''; }
+});
+
+document.getElementById('ev-cancelarPublicar').addEventListener('click', () => {
+    document.getElementById('ev-modalPublicar').style.display = 'none';
+    evPublicarPubId = null;
+});
+document.getElementById('ev-modalPublicar').addEventListener('click', e => {
+    if (e.target === document.getElementById('ev-modalPublicar')) {
+        document.getElementById('ev-modalPublicar').style.display = 'none';
+        evPublicarPubId = null;
+    }
+});
+document.getElementById('ev-confirmarPublicar').addEventListener('click', async () => {
+    if (!evPublicarPubId) return;
+    const checkInm   = document.getElementById('ev-checkInmediato');
+    const inputFecha = document.getElementById('ev-inputFechaPublicacion');
+    try {
+        let options;
+        if ((checkInm && checkInm.checked) || !inputFecha || !inputFecha.value) {
+            options = { method: 'POST' };
+        } else {
+            options = { method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ fechaPublicacion: inputFecha.value + ':00' }) };
+        }
+        await evFetchJson('/api/v1/publicaciones/' + evPublicarPubId + '/publicar', options);
+        document.getElementById('ev-modalPublicar').style.display = 'none';
+        evPublicarPubId = null;
+        mostrarToast('Publicación enviada');
+        await evCargarPublicaciones(evEvento.id);
+    } catch (err) { mostrarToast('Error: ' + err.message); }
+});
 
 function evAbrirModalFeedback(pubId) {
     evFeedbackPubId = pubId;
