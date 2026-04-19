@@ -355,6 +355,7 @@ Tabla de asociación N-N entre adjuntos y publicaciones. Un adjunto puede estar 
 | `id` | Identificador único UUID |
 | `id_adjunto` | FK a ADJUNTO |
 | `id_publicacion` | FK a PUBLICACION |
+| `orden` | Integer — posición del adjunto en la publicación. 0 = imagen principal. Permite ordenar carruseles en Instagram y álbumes en Facebook. |
 
 ---
 

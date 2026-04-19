@@ -23,4 +23,8 @@ public class AdjuntoPublicacion {
 
     @Column(name = "id_publicacion", nullable = false)
     private UUID idPublicacion;
+
+    @Column(name = "orden", nullable = false)
+    @Builder.Default
+    private Integer orden = 0;
 }

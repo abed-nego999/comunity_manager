@@ -1,7 +1,9 @@
 package com.esteban.comunitymanager.service;
 
 import com.esteban.comunitymanager.claude.ClaudeService;
+import com.esteban.comunitymanager.dto.request.ReordenarAdjuntosRequest;
 import com.esteban.comunitymanager.dto.response.AdjuntoResponse;
+import com.esteban.comunitymanager.exception.PublicacionInmutableException;
 import com.esteban.comunitymanager.exception.ResourceNotFoundException;
 import com.esteban.comunitymanager.model.*;
 import com.esteban.comunitymanager.repository.*;
@@ -17,9 +19,12 @@ import org.springframework.web.multipart.MultipartFile;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -175,11 +180,25 @@ public class AdjuntoService {
                 .origen(OrigenAdjunto.MANUAL)
                 .build());
 
+        procesarDescripcionSiNecesario(adjunto);
+
+        int orden = siguienteOrden(publicacionId);
         adjuntoPublicacionRepository.save(AdjuntoPublicacion.builder()
                 .idAdjunto(adjunto.getId())
                 .idPublicacion(publicacionId)
+                .orden(orden)
                 .build());
 
+        return AdjuntoResponse.from(adjunto, orden);
+    }
+
+    // ── Generar descripción IA bajo demanda ───────────────────────────────────
+
+    @Transactional
+    public AdjuntoResponse generarDescripcion(UUID adjuntoId) {
+        Adjunto adjunto = adjuntoRepository.findById(adjuntoId)
+                .orElseThrow(() -> ResourceNotFoundException.of("Adjunto", adjuntoId));
+        procesarDescripcionSiNecesario(adjunto);
         return AdjuntoResponse.from(adjunto);
     }
 
@@ -193,9 +212,11 @@ public class AdjuntoService {
                 .orElseThrow(() -> ResourceNotFoundException.of("Publicacion", publicacionId));
 
         if (!adjuntoPublicacionRepository.existsByIdAdjuntoAndIdPublicacion(adjuntoId, publicacionId)) {
+            int orden = siguienteOrden(publicacionId);
             adjuntoPublicacionRepository.save(AdjuntoPublicacion.builder()
                     .idAdjunto(adjuntoId)
                     .idPublicacion(publicacionId)
+                    .orden(orden)
                     .build());
         }
 
@@ -235,12 +256,14 @@ public class AdjuntoService {
                 .motor(motor)
                 .build());
 
+        int orden = siguienteOrden(publicacionId);
         adjuntoPublicacionRepository.save(AdjuntoPublicacion.builder()
                 .idAdjunto(adjunto.getId())
                 .idPublicacion(publicacionId)
+                .orden(orden)
                 .build());
 
-        return AdjuntoResponse.from(adjunto);
+        return AdjuntoResponse.from(adjunto, orden);
     }
 
     // ── Eliminar ─────────────────────────────────────────────────────────────
@@ -324,14 +347,65 @@ public class AdjuntoService {
 
     @Transactional(readOnly = true)
     public List<AdjuntoResponse> listarPorPublicacion(UUID publicacionId) {
-        return adjuntoPublicacionRepository.findByIdPublicacion(publicacionId).stream()
+        return adjuntoPublicacionRepository.findByIdPublicacionOrderByOrdenAsc(publicacionId).stream()
                 .map(ap -> adjuntoRepository.findById(ap.getIdAdjunto())
-                        .map(AdjuntoResponse::from)
+                        .map(a -> AdjuntoResponse.from(a, ap.getOrden()))
                         .orElseThrow(() -> ResourceNotFoundException.of("Adjunto", ap.getIdAdjunto())))
                 .toList();
     }
 
+    // ── Reordenar adjuntos de una publicación ─────────────────────────────────
+
+    @Transactional
+    public void reordenarAdjuntos(UUID publicacionId, List<ReordenarAdjuntosRequest.ItemOrden> items) {
+        Publicacion pub = publicacionRepository.findById(publicacionId)
+                .orElseThrow(() -> ResourceNotFoundException.of("Publicacion", publicacionId));
+        if (pub.getEstado() == EstadoPublicacion.ENVIADA) {
+            throw new PublicacionInmutableException(publicacionId);
+        }
+
+        Map<UUID, AdjuntoPublicacion> apPorAdjunto = adjuntoPublicacionRepository
+                .findByIdPublicacion(publicacionId).stream()
+                .collect(Collectors.toMap(AdjuntoPublicacion::getIdAdjunto, Function.identity()));
+
+        for (ReordenarAdjuntosRequest.ItemOrden item : items) {
+            AdjuntoPublicacion ap = apPorAdjunto.get(item.getAdjuntoId());
+            if (ap != null) {
+                ap.setOrden(item.getOrden());
+                adjuntoPublicacionRepository.save(ap);
+            }
+        }
+    }
+
+    // ── Desasociar adjunto de una publicación concreta ────────────────────────
+
+    @Transactional
+    public void desasociarDePublicacion(UUID adjuntoId, UUID publicacionId) {
+        Adjunto adjunto = adjuntoRepository.findById(adjuntoId)
+                .orElseThrow(() -> ResourceNotFoundException.of("Adjunto", adjuntoId));
+        Publicacion pub = publicacionRepository.findById(publicacionId)
+                .orElseThrow(() -> ResourceNotFoundException.of("Publicacion", publicacionId));
+        if (pub.getEstado() == EstadoPublicacion.ENVIADA) {
+            throw new PublicacionInmutableException(publicacionId);
+        }
+
+        adjuntoPublicacionRepository.deleteByIdAdjuntoAndIdPublicacion(adjuntoId, publicacionId);
+
+        boolean tieneReferencias =
+                !adjuntoPublicacionRepository.findByIdAdjunto(adjuntoId).isEmpty()
+                || adjuntoMensajeRepository.existsByIdAdjunto(adjuntoId);
+
+        if (!tieneReferencias) {
+            storageService.eliminarFichero(adjunto.getRutaFichero());
+            adjuntoRepository.delete(adjunto);
+        }
+    }
+
     // ── Helpers ───────────────────────────────────────────────────────────────
+
+    private int siguienteOrden(UUID publicacionId) {
+        return adjuntoPublicacionRepository.findMaxOrdenByIdPublicacion(publicacionId) + 1;
+    }
 
     private Evento buscarEvento(UUID id) {
         return eventoRepository.findById(id)

@@ -1,12 +1,10 @@
 package com.esteban.comunitymanager.service;
 
-import com.esteban.comunitymanager.model.Cliente;
-import com.esteban.comunitymanager.model.InsightPagina;
-import com.esteban.comunitymanager.model.Plataforma;
-import com.esteban.comunitymanager.repository.ClienteRepository;
-import com.esteban.comunitymanager.repository.InsightPaginaRepository;
-import com.esteban.comunitymanager.repository.PlataformaRepository;
 import com.esteban.comunitymanager.dto.response.InsightFranjaResponse;
+import com.esteban.comunitymanager.dto.response.ResultadoPublicacion;
+import com.esteban.comunitymanager.exception.MetaPublicacionException;
+import com.esteban.comunitymanager.model.*;
+import com.esteban.comunitymanager.repository.*;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.annotation.PostConstruct;
@@ -29,21 +27,29 @@ import java.util.Collections;
 public class MetaService {
 
     private static final Logger log = LoggerFactory.getLogger(MetaService.class);
-    private static final String META_GRAPH_URL = "https://graph.facebook.com/v18.0";
+    private static final String META_GRAPH_URL = "https://graph.facebook.com/v19.0";
     private static final Duration REFRESH_THRESHOLD = Duration.ofDays(7);
+    private static final Duration MIN_SCHEDULED_AHEAD = Duration.ofMinutes(10);
 
     @Value("${meta.facebook.page-id:}")
     private String pageId;
 
+    /** Token del sistema/usuario, leído de .env. Se usa para obtener el Page Access Token. */
     @Value("${meta.page-access-token:}")
-    private String pageAccessToken;
+    private String sistemaToken;
 
     @Value("${meta.mock-enabled:false}")
     private boolean mockEnabled;
 
+    /** Page Access Token cacheado en memoria. Se obtiene de Meta la primera vez que se necesita. */
+    private volatile String cachedPageToken;
+
     private final InsightPaginaRepository insightPaginaRepository;
     private final PlataformaRepository plataformaRepository;
     private final ClienteRepository clienteRepository;
+    private final AdjuntoPublicacionRepository adjuntoPublicacionRepository;
+    private final AdjuntoRepository adjuntoRepository;
+    private final StorageService storageService;
     private final ObjectMapper objectMapper;
 
     private RestClient metaClient;
@@ -51,10 +57,16 @@ public class MetaService {
     public MetaService(InsightPaginaRepository insightPaginaRepository,
                        PlataformaRepository plataformaRepository,
                        ClienteRepository clienteRepository,
+                       AdjuntoPublicacionRepository adjuntoPublicacionRepository,
+                       AdjuntoRepository adjuntoRepository,
+                       StorageService storageService,
                        ObjectMapper objectMapper) {
         this.insightPaginaRepository = insightPaginaRepository;
         this.plataformaRepository = plataformaRepository;
         this.clienteRepository = clienteRepository;
+        this.adjuntoPublicacionRepository = adjuntoPublicacionRepository;
+        this.adjuntoRepository = adjuntoRepository;
+        this.storageService = storageService;
         this.objectMapper = objectMapper;
     }
 
@@ -65,6 +77,43 @@ public class MetaService {
                 .build();
         log.info("[Meta] MetaService inicializado. Mock activo: {}", mockEnabled);
     }
+
+    // ── Publicación en Facebook ───────────────────────────────────────────────
+    //
+    // TODO (Fase 2 — OAuth): La publicación real en Meta está deshabilitada hasta
+    // implementar Facebook Login OAuth con Page Access Token.
+    // Cuando se retome:
+    //   1. Restaurar obtenerPageAccessToken() que llama a:
+    //      GET /{pageId}?fields=access_token&access_token={sistemaToken}
+    //   2. Restaurar publicarFeedSoloTexto() que llama a:
+    //      POST /{pageId}/feed  (application/x-www-form-urlencoded)
+    //      params: message, access_token, published, [scheduled_publish_time]
+    //   3. Restaurar publicarFotoConTexto() que llama a:
+    //      POST /{pageId}/photos  (multipart/form-data)
+    //      params: source (binary), caption, access_token, published, [scheduled_publish_time]
+    //   4. En modo dev usar published=false (borrador visible solo para admins).
+    //   5. En modo prod: published=true (inmediato) o published=false + scheduled_publish_time.
+    //   6. Extraer idExterno de: nodo.has("post_id") ? post_id : id
+    //
+    // ──────────────────────────────────────────────────────────────────────────
+
+    /**
+     * Simula la publicación en Facebook.
+     * Pendiente implementar OAuth para llamada real a Meta Graph API.
+     */
+    public ResultadoPublicacion publicarEnFacebook(Publicacion publicacion) {
+        Instant ahora = Instant.now();
+        String idSimulado = "SIMULADO_" + UUID.randomUUID();
+        Instant fechaPublicacionReal = (publicacion.getFechaPublicacion() != null)
+                ? publicacion.getFechaPublicacion()
+                : ahora;
+
+        log.info("[Meta] Publicación SIMULADA — pendiente implementar OAuth (id={})", idSimulado);
+
+        return new ResultadoPublicacion(idSimulado, ahora, fechaPublicacionReal);
+    }
+
+    // ── Insights ─────────────────────────────────────────────────────────────
 
     /**
      * Devuelve el JSON de insights para el cliente dado.
@@ -233,7 +282,7 @@ public class MetaService {
     // ── Llamada a Meta Graph API ──────────────────────────────────────────────
 
     private String fetchInsightsJson() {
-        if (!pageId.isBlank() && !pageAccessToken.isBlank()) {
+        if (!pageId.isBlank() && !sistemaToken.isBlank()) {
             try {
                 long since = LocalDate.now().minusDays(30).atStartOfDay().toEpochSecond(ZoneOffset.UTC);
                 long until = LocalDate.now().atStartOfDay().toEpochSecond(ZoneOffset.UTC);
@@ -241,7 +290,7 @@ public class MetaService {
                 return metaClient.get()
                         .uri("/{pageId}/insights?metric=page_fans_online_per_day&period=day"
                                         + "&since={since}&until={until}&access_token={token}",
-                                pageId, since, until, pageAccessToken)
+                                pageId, since, until, sistemaToken)
                         .retrieve()
                         .body(String.class);
             } catch (Exception e) {

@@ -1,6 +1,7 @@
 package com.esteban.comunitymanager.config;
 
 import com.esteban.comunitymanager.dto.response.ErrorResponse;
+import com.esteban.comunitymanager.exception.MetaPublicacionException;
 import com.esteban.comunitymanager.exception.PublicacionInmutableException;
 import com.esteban.comunitymanager.exception.ResourceNotFoundException;
 import org.springframework.http.HttpStatus;
@@ -58,6 +59,25 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                 .body(ErrorResponse.builder()
                         .codigo("BAD_REQUEST")
+                        .mensaje(ex.getMessage())
+                        .build());
+    }
+
+    @ExceptionHandler(MetaPublicacionException.class)
+    public ResponseEntity<ErrorResponse> handleMetaPublicacion(MetaPublicacionException ex) {
+        HttpStatus status = ex.isErrorDatos() ? HttpStatus.BAD_REQUEST : HttpStatus.INTERNAL_SERVER_ERROR;
+        return ResponseEntity.status(status)
+                .body(ErrorResponse.builder()
+                        .codigo("META_ERROR")
+                        .mensaje(ex.getMessage())
+                        .build());
+    }
+
+    @ExceptionHandler(UnsupportedOperationException.class)
+    public ResponseEntity<ErrorResponse> handleUnsupportedOperation(UnsupportedOperationException ex) {
+        return ResponseEntity.status(HttpStatus.NOT_IMPLEMENTED)
+                .body(ErrorResponse.builder()
+                        .codigo("NOT_IMPLEMENTED")
                         .mensaje(ex.getMessage())
                         .build());
     }

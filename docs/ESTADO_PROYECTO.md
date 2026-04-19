@@ -259,7 +259,41 @@ meta.instagram.business-account-id=987654321098765
 1. Fase 2: integración Meta Graph API (Facebook + Instagram)
 2. Fase 3: integración YouTube Data API v3
 3. Fase 4: integración Ideogram 3 API
-4. Futuro: empaquetado como instalador Windows (.exe) para distribución open source
+4. Futuro: Facebook Login OAuth para onboarding de nuevos clientes
+5. Futuro: empaquetado como instalador Windows (.exe) para distribución open source
+
+---
+
+## Decisiones técnicas pendientes de implementar
+
+### Facebook Login — Onboarding de clientes
+
+**Contexto:** Actualmente las credenciales de Meta se configuran manualmente
+obteniendo tokens desde Business Manager. Esto funciona para un único cliente
+pero no escala bien cuando haya múltiples clientes.
+
+**Solución propuesta:** Implementar el flujo OAuth de Facebook Login:
+- Ruta `/oauth/facebook/callback` en Spring Boot
+- El cliente hace clic en "Conectar con Facebook" en la UI de configuración
+- Meta redirige con un code que la app intercambia por un User Access Token
+- La app obtiene automáticamente el Page Access Token de cada página
+- Se guarda cifrado en CREDENCIAL como siempre
+
+**Ventajas:**
+- El cliente conecta su cuenta sin necesidad de conocimientos técnicos
+- Los Page Access Tokens son los correctos para publicar (evita el error
+  "Unpublished posts must be posted as the page itself")
+- Tokens renovables de forma independiente por cliente
+- Arquitectura correcta para multi-cliente
+
+**Requisitos Meta:**
+- En modo desarrollo (app no revisada por Meta): funciona para usuarios
+  añadidos como testers/admins de la app — válido para uso personal
+- En producción con usuarios externos: requiere revisión de Meta
+  (vídeo demostrativo, política de privacidad, etc.) — puede tardar semanas
+
+**Cuándo implementarlo:** Cuando se añada el segundo cliente a la app.
+En ese momento la gestión manual de tokens deja de ser viable.
 
 ---
 

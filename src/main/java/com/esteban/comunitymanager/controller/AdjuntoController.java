@@ -1,5 +1,6 @@
 package com.esteban.comunitymanager.controller;
 
+import com.esteban.comunitymanager.dto.request.ReordenarAdjuntosRequest;
 import com.esteban.comunitymanager.dto.response.AdjuntoResponse;
 import com.esteban.comunitymanager.service.AdjuntoService;
 import com.esteban.comunitymanager.service.StorageService;
@@ -72,6 +73,22 @@ public class AdjuntoController {
         return ResponseEntity.ok(adjuntoService.listarPorPublicacion(id));
     }
 
+    @PatchMapping("/api/v1/publicaciones/{id}/adjuntos/reordenar")
+    public ResponseEntity<Void> reordenarAdjuntos(
+            @PathVariable UUID id,
+            @RequestBody ReordenarAdjuntosRequest request) {
+        adjuntoService.reordenarAdjuntos(id, request.getItems());
+        return ResponseEntity.noContent().build();
+    }
+
+    @DeleteMapping("/api/v1/publicaciones/{pubId}/adjuntos/{adjId}")
+    public ResponseEntity<Void> desasociarAdjuntoDePublicacion(
+            @PathVariable UUID pubId,
+            @PathVariable UUID adjId) {
+        adjuntoService.desasociarDePublicacion(adjId, pubId);
+        return ResponseEntity.noContent().build();
+    }
+
     // ── Operaciones sobre un adjunto concreto ─────────────────────────────────
 
     /**
@@ -87,6 +104,11 @@ public class AdjuntoController {
             @RequestParam(required = false) String contexto) {
         adjuntoService.eliminar(id, contexto);
         return ResponseEntity.noContent().build();
+    }
+
+    @PostMapping("/api/v1/adjuntos/{id}/describir")
+    public ResponseEntity<AdjuntoResponse> describirAdjunto(@PathVariable UUID id) {
+        return ResponseEntity.ok(adjuntoService.generarDescripcion(id));
     }
 
     @PatchMapping("/api/v1/adjuntos/{id}/descripcion-ia")

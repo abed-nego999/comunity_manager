@@ -21,6 +21,7 @@ public class AdjuntoResponse {
     private OrigenAdjunto origen;
     private String descripcionIa;
     private Instant subidoEn;
+    private Integer orden;
 
     public static AdjuntoResponse from(Adjunto a) {
         return AdjuntoResponse.builder()
@@ -33,5 +34,11 @@ public class AdjuntoResponse {
                 .descripcionIa(a.getDescripcionIa())
                 .subidoEn(a.getSubidoEn())
                 .build();
+    }
+
+    public static AdjuntoResponse from(Adjunto a, int orden) {
+        AdjuntoResponse r = from(a);
+        r.setOrden(orden);
+        return r;
     }
 }

@@ -4,6 +4,7 @@ import com.esteban.comunitymanager.dto.request.FeedbackRequest;
 import com.esteban.comunitymanager.dto.request.PublicacionRequest;
 import com.esteban.comunitymanager.dto.request.PublicarRequest;
 import com.esteban.comunitymanager.dto.response.PublicacionResponse;
+import com.esteban.comunitymanager.dto.response.ResultadoPublicacion;
 import com.esteban.comunitymanager.exception.PublicacionInmutableException;
 import com.esteban.comunitymanager.exception.ResourceNotFoundException;
 import com.esteban.comunitymanager.model.*;
@@ -24,6 +25,7 @@ public class PublicacionService {
     private final PublicacionRepository publicacionRepository;
     private final EventoRepository eventoRepository;
     private final TipoPublicacionRepository tipoPublicacionRepository;
+    private final MetaService metaService;
 
     @Transactional(readOnly = true)
     public List<PublicacionResponse> listarPublicaciones(UUID eventoId, EstadoPublicacion estado) {
@@ -113,11 +115,8 @@ public class PublicacionService {
 
     /**
      * Publica la publicación en la plataforma externa.
-     *
-     * Fase 1: simula el envío (establece fechas y estado ENVIADA sin llamada real a la API).
-     * Fase 2/3: se implementará la integración real con Meta Graph API y YouTube Data API.
-     *
-     * Si publicacionAutomatica=false (Blog Web), lanza excepción — el usuario publica manualmente.
+     * Solo se puede publicar si la publicación está en estado APROBADA.
+     * Si falla la llamada a la API externa el estado permanece APROBADA (rollback).
      */
     @Transactional
     public PublicacionResponse publicar(UUID id, PublicarRequest request) {
@@ -131,19 +130,27 @@ public class PublicacionService {
                     + " no admite publicación automática — publícalo manualmente.");
         }
 
+        // Actualizar fechaPublicacion si la request trae una nueva; si no hay, usar la ya guardada o ahora
         Instant ahora = Instant.now();
-        publicacion.setFechaEnvio(ahora);
-
         if (request != null && request.getFechaPublicacion() != null) {
             publicacion.setFechaPublicacion(
-                request.getFechaPublicacion().atZone(ZoneId.of("Europe/Madrid")).toInstant());
-        } else {
+                    request.getFechaPublicacion().atZone(ZoneId.of("Europe/Madrid")).toInstant());
+        } else if (publicacion.getFechaPublicacion() == null) {
             publicacion.setFechaPublicacion(ahora);
         }
 
-        // TODO Fase 2/3: llamar a Meta Graph API o YouTube Data API aquí
-        // publicacion.setIdExterno(resultadoApiExterna.getId());
+        String nombrePlataforma = tipo.getPlataforma().getNombre();
+        ResultadoPublicacion resultado = switch (nombrePlataforma) {
+            case "Facebook" -> metaService.publicarEnFacebook(publicacion);
+            case "Instagram", "YouTube" -> throw new UnsupportedOperationException(
+                    "Publicación en " + nombrePlataforma + " aún no implementada");
+            default -> throw new UnsupportedOperationException(
+                    "Publicación en " + nombrePlataforma + " aún no implementada");
+        };
 
+        publicacion.setIdExterno(resultado.idExterno());
+        publicacion.setFechaEnvio(resultado.fechaEnvio());
+        publicacion.setFechaPublicacion(resultado.fechaPublicacion());
         publicacion.setEstado(EstadoPublicacion.ENVIADA);
         return PublicacionResponse.from(publicacionRepository.save(publicacion));
     }
